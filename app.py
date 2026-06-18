@@ -1,4 +1,5 @@
 import json
+import re
 import time
 
 from flask import Flask, Response, jsonify, render_template, request
@@ -19,7 +20,7 @@ def index():
 
 @app.route("/api/report/start", methods=["POST"])
 def start():
-    body = request.get_json(force=True)
+    body = request.get_json(force=True, silent=True) or {}
     name = (body.get("name") or "").strip()
     tag = (body.get("tag") or "").strip()
     region = (body.get("region") or "na").strip().lower()
@@ -58,9 +59,10 @@ def pdf(job_id):
     if data is None:
         html = report.render_html(agg, player)
         return Response(html, mimetype="text/html")
+    safe_name = re.sub(r"[^A-Za-z0-9_-]", "_", player["name"]) or "player"
     return Response(data, mimetype="application/pdf",
                     headers={"Content-Disposition":
-                             f'attachment; filename="{player["name"]}_stats.pdf"'})
+                             f'attachment; filename="{safe_name}_stats.pdf"'})
 
 
 if __name__ == "__main__":
