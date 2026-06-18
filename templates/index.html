@@ -1,4 +1,265 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>Valo Stats</title>
-<link rel="stylesheet" href="/static/styles.css"></head>
-<body><div id="app"></div><script src="/static/app.js"></script></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Valo Stats</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Nav ──────────────────────────────────────────── -->
+  <nav class="nav">
+    <a href="/" class="nav-logo">
+      <span class="nav-mark">
+        <!-- Simplified crosshair / target mark -->
+        <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="8" cy="8" r="2.5" fill="white"/>
+          <path d="M8 1v3M8 12v3M1 8h3M12 8h3" stroke="white" stroke-width="1.5"
+                stroke-linecap="round" fill="none"/>
+        </svg>
+      </span>
+      <span class="nav-wordmark">Valo Stats</span>
+    </a>
+    <span class="nav-sep"></span>
+    <span class="nav-status" id="nav-status">Ready</span>
+  </nav>
+
+  <!-- ── Body ─────────────────────────────────────────── -->
+  <div class="main">
+
+    <!-- ── Sidebar: form ─────────────────────────────── -->
+    <aside class="sidebar">
+      <div class="sidebar-heading">
+        <span class="sidebar-label">Player lookup</span>
+        <h1 class="sidebar-title">Generate your<br>stats report</h1>
+        <p class="sidebar-desc">
+          Enter your Riot ID to pull up to 2 years of match history
+          and export a full PDF breakdown.
+        </p>
+      </div>
+
+      <form class="form" id="report-form" novalidate>
+
+        <div class="field">
+          <label class="field-label" for="input-name">Riot ID</label>
+          <div class="field-row">
+            <input
+              class="input"
+              type="text"
+              id="input-name"
+              name="name"
+              placeholder="PlayerName"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <input
+              class="input input-tag"
+              type="text"
+              id="input-tag"
+              name="tag"
+              placeholder="#TAG"
+              autocomplete="off"
+              spellcheck="false"
+              maxlength="10"
+            />
+          </div>
+          <span class="field-hint">e.g. Skye and #1234 for Skye#1234</span>
+          <span class="field-error" id="error-name-tag">Name and tag are required.</span>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="input-region">Region</label>
+          <select class="select" id="input-region" name="region">
+            {% for r in regions %}
+            <option value="{{ r }}">{{ r | upper }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <span class="field-error visible" id="error-api" style="display:none"></span>
+        </div>
+
+        <button class="btn-primary" type="submit" id="btn-submit">
+          Generate Report
+        </button>
+
+      </form>
+    </aside>
+
+    <!-- ── Stage: progress / results ─────────────────── -->
+    <main class="stage">
+
+      <!-- Empty state (shown before any job starts) -->
+      <div class="empty-state" id="empty-state">
+        <span class="empty-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="1.5"
+               stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 8v4l2.5 2.5"/>
+          </svg>
+        </span>
+        <h2 class="empty-title">No report yet</h2>
+        <p class="empty-body">
+          Fill in your Riot ID on the left to start fetching your match history.
+          Progress will appear here in real time.
+        </p>
+        <div class="empty-steps">
+          <div class="step-row">
+            <span class="step-num">1</span>
+            Enter your Riot Name and tag
+          </div>
+          <div class="step-row">
+            <span class="step-num">2</span>
+            Select your region
+          </div>
+          <div class="step-row">
+            <span class="step-num">3</span>
+            Hit Generate - watch it run live
+          </div>
+          <div class="step-row">
+            <span class="step-num">4</span>
+            Download your stats PDF
+          </div>
+        </div>
+      </div>
+
+      <!-- Job panel (hidden until job starts) -->
+      <div class="job-panel" id="job-panel">
+
+        <!-- Player + status badge -->
+        <div class="job-header">
+          <div class="job-player">
+            <span class="job-player-name" id="job-player-name">
+              Player <span class="tag">#TAG</span>
+            </span>
+            <span class="job-player-meta" id="job-player-meta">
+              Fetching match history...
+            </span>
+          </div>
+          <span class="job-status-badge" id="job-status-badge">Queued</span>
+        </div>
+
+        <!-- Paused / rate-limit banner -->
+        <div class="paused-banner" id="paused-banner" role="status">
+          <svg class="paused-icon" viewBox="0 0 18 18" fill="none"
+               xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="3" width="3" height="12" rx="1" fill="currentColor"/>
+            <rect x="11" y="3" width="3" height="12" rx="1" fill="currentColor"/>
+          </svg>
+          <span class="paused-text">Rate limit reached - waiting for the API</span>
+          <span class="paused-countdown" id="paused-countdown">--</span>
+        </div>
+
+        <!-- Progress bar -->
+        <div class="progress-section">
+          <div class="progress-header">
+            <span class="progress-label">Progress</span>
+            <span class="progress-pct" id="progress-pct">0%</span>
+          </div>
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" id="progress-bar"></div>
+          </div>
+          <div class="eta-row">
+            <span class="eta-label">ETA</span>
+            <span class="eta-value" id="eta-value">Calculating...</span>
+          </div>
+        </div>
+
+        <!-- Stats grid: counters -->
+        <div class="stats-grid">
+          <div class="stat-cell">
+            <span class="stat-key">Matches parsed</span>
+            <span class="stat-value climbing" id="stat-matches">0</span>
+            <span class="stat-sub">games fetched so far</span>
+          </div>
+          <div class="stat-cell">
+            <span class="stat-key">Pages fetched</span>
+            <span class="stat-value" id="stat-pages">0</span>
+            <span class="stat-sub">20 matches per page</span>
+          </div>
+          <div class="stat-cell" style="grid-column: 1 / -1;">
+            <span class="stat-key">Oldest match reached</span>
+            <span class="stat-value" id="stat-oldest" style="font-size:15px">
+              Waiting...
+            </span>
+            <span class="stat-sub">going back in history</span>
+          </div>
+        </div>
+
+        <!-- Live message -->
+        <div class="message-row">
+          <span class="message-dot" id="message-dot"></span>
+          <span class="message-text" id="message-text">Initializing...</span>
+        </div>
+
+        <!-- Error panel -->
+        <div class="error-panel" id="error-panel" role="alert">
+          <span class="error-icon">
+            <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"
+                 stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+              <circle cx="8" cy="8" r="7"/>
+              <path d="M8 5v3.5M8 11.5v.5"/>
+            </svg>
+          </span>
+          <div class="error-body">
+            <div class="error-title">Error</div>
+            <div class="error-msg" id="error-msg">Something went wrong.</div>
+          </div>
+        </div>
+
+        <!-- Download section (shown on done) -->
+        <div class="download-section" id="download-section">
+          <div class="download-header">
+            <span class="download-icon">
+              <svg viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg"
+                   stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                   stroke-linejoin="round">
+                <path d="M9 2v9m0 0l-3-3m3 3l3-3"/>
+                <path d="M3 13v1a2 2 0 002 2h8a2 2 0 002-2v-1"/>
+              </svg>
+            </span>
+            <span class="download-title">Report ready</span>
+          </div>
+          <span class="download-sub" id="download-sub">
+            Your stats report has been compiled.
+          </span>
+          <a class="btn-download" id="btn-download" href="#" target="_blank"
+             rel="noopener noreferrer">
+            <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"
+                 stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                 stroke-linejoin="round">
+              <path d="M7 1v7m0 0L4.5 5.5M7 8l2.5-2.5"/>
+              <path d="M1.5 10.5v.5a2 2 0 002 2h7a2 2 0 002-2v-.5"/>
+            </svg>
+            Download PDF
+          </a>
+        </div>
+
+        <!-- New run button -->
+        <button class="btn-reset" id="btn-reset" style="display:none">
+          Run another report
+        </button>
+
+      </div><!-- /.job-panel -->
+
+    </main><!-- /.stage -->
+
+  </div><!-- /.main -->
+
+  <!-- ── Footer ────────────────────────────────────────── -->
+  <footer class="footer">
+    <span class="footer-note">
+      Data via Henrik Dev API - unofficial Valorant stats
+    </span>
+    <span class="footer-note" id="footer-job-id"></span>
+  </footer>
+
+</div><!-- /#app -->
+
+<script src="/static/app.js"></script>
+</body>
+</html>
