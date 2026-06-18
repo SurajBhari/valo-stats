@@ -1,4 +1,3 @@
-import types
 import henrik
 
 
@@ -70,3 +69,37 @@ def test_pause_when_throttled(monkeypatch):
     resp = _Resp(200, {}, {"x-ratelimit-remaining": "1", "x-ratelimit-reset": "7"})
     c._sleep_if_throttled(resp)
     assert slept == [7] and paused == [7]
+
+
+def test_429_retry_with_missing_header(monkeypatch):
+    slept = []
+    paused = []
+    c = henrik.HenrikClient(api_key="k", on_pause=lambda s: paused.append(s))
+    monkeypatch.setattr(henrik.time, "sleep", lambda s: slept.append(s))
+
+    call_count = [0]
+    def mock_request(url, params=None):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            # First call: 429 with no x-ratelimit-remaining header, but with reset
+            return _Resp(429, {}, {"x-ratelimit-reset": "5"})
+        else:
+            # Second call: 200 with valid data
+            return _Resp(200, {"data": [{
+                "meta": {"id": "m1", "started_at": "2024-01-01T00:00:00.000Z",
+                         "map": {"name": "Ascent"}, "mode": "Competitive"},
+                "stats": {"team": "Red", "character": {"name": "Jett"}, "score": 4800,
+                          "kills": 20, "deaths": 10, "assists": 5,
+                          "shots": {"head": 20, "body": 70, "leg": 10},
+                          "damage": {"made": 4000, "received": 3000}},
+                "teams": {"red": 13, "blue": 11}}]}, {"x-ratelimit-remaining": "99"})
+
+    monkeypatch.setattr(c, "_request", mock_request)
+    out = c.get_matches_page("na", "n", "t", 1, 20)
+
+    # Verify sleep was called with 5 seconds
+    assert slept == [5], f"Expected sleep([5]), got {slept}"
+    # Verify pause callback was called
+    assert paused == [5], f"Expected pause([5]), got {paused}"
+    # Verify data was parsed correctly on the retry
+    assert len(out) == 1 and out[0]["id"] == "m1"

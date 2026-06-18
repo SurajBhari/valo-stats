@@ -1,5 +1,5 @@
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 
 import requests
 
@@ -8,7 +8,7 @@ import config
 
 def _parse_ts(started_at):
     s = started_at.replace("Z", "+00:00")
-    return datetime.fromisoformat(s).replace(tzinfo=timezone.utc).timestamp()
+    return datetime.fromisoformat(s).timestamp()
 
 
 def normalize_match(raw):
@@ -83,7 +83,10 @@ class HenrikClient:
         url = f"{config.API_BASE}/valorant/v1/lifetime/matches/{region}/{name}/{tag}"
         resp = self._request(url, params={"page": page, "size": size})
         if resp.status_code == 429:
-            self._sleep_if_throttled(resp)
+            wait = int(resp.headers.get("x-ratelimit-reset", "60"))
+            if self.on_pause:
+                self.on_pause(wait)
+            time.sleep(wait)
             return self.get_matches_page(region, name, tag, page, size)
         if resp.status_code != 200:
             raise HenrikError(f"Match fetch failed ({resp.status_code})")
