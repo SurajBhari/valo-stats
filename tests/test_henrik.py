@@ -71,6 +71,24 @@ def test_pause_when_throttled(monkeypatch):
     assert slept == [7] and paused == [7]
 
 
+def test_name_with_slash_is_percent_encoded(monkeypatch):
+    """A name containing '/' must be percent-encoded to prevent path injection."""
+    captured = []
+
+    def fake_request(url, params=None):
+        captured.append(url)
+        return _Resp(200, {"data": {"puuid": "x", "region": "na",
+                                    "account_level": 1}},
+                     {"x-ratelimit-remaining": "20"})
+
+    c = henrik.HenrikClient(api_key="k")
+    monkeypatch.setattr(c, "_request", fake_request)
+    c.get_account("bad/name", "tag")
+    assert len(captured) == 1
+    assert "bad%2Fname" in captured[0], f"Expected percent-encoding in URL: {captured[0]}"
+    assert "bad/name" not in captured[0], f"Raw slash must not appear in URL: {captured[0]}"
+
+
 def test_429_retry_with_missing_header(monkeypatch):
     slept = []
     paused = []

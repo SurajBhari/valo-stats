@@ -1,5 +1,6 @@
 import time
 from datetime import datetime
+from urllib.parse import quote
 
 import requests
 
@@ -68,7 +69,7 @@ class HenrikClient:
             time.sleep(wait)
 
     def get_account(self, name, tag):
-        url = f"{config.API_BASE}/valorant/v2/account/{name}/{tag}"
+        url = f"{config.API_BASE}/valorant/v2/account/{quote(name, safe='')}/{quote(tag, safe='')}"
         resp = self._request(url)
         if resp.status_code == 404:
             raise HenrikError("Player not found")
@@ -80,7 +81,7 @@ class HenrikClient:
                 "level": d.get("account_level", 0)}
 
     def get_matches_page(self, region, name, tag, page, size):
-        url = f"{config.API_BASE}/valorant/v1/lifetime/matches/{region}/{name}/{tag}"
+        url = f"{config.API_BASE}/valorant/v1/lifetime/matches/{quote(region, safe='')}/{quote(name, safe='')}/{quote(tag, safe='')}"
         resp = self._request(url, params={"page": page, "size": size})
         if resp.status_code == 429:
             wait = int(resp.headers.get("x-ratelimit-reset", "60"))
