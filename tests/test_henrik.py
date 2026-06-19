@@ -429,6 +429,55 @@ def test_get_mmr_none_when_unranked(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# get_match_detail
+# ---------------------------------------------------------------------------
+
+def test_get_match_detail_returns_data(monkeypatch):
+    c = henrik.HenrikClient(api_key="k")
+    monkeypatch.setattr(c, "_request",
+                        lambda url, params=None: _Resp(200, {"data": {"kills": [1, 2]}},
+                                                       {"x-ratelimit-remaining": "50"}))
+    assert c.get_match_detail("mid", "ap") == {"kills": [1, 2]}
+
+
+def test_get_match_detail_url_has_v4_region_id(monkeypatch):
+    captured = []
+    c = henrik.HenrikClient(api_key="k")
+    monkeypatch.setattr(c, "_request",
+                        lambda url, params=None: (captured.append(url), _Resp(200, {"data": {}}, {}))[1])
+    c.get_match_detail("match-123", "eu")
+    assert "/valorant/v4/match/" in captured[0]
+    assert "eu" in captured[0] and "match-123" in captured[0]
+
+
+def test_get_match_detail_429_retries_then_succeeds(monkeypatch):
+    slept = []
+    c = henrik.HenrikClient(api_key="k", on_pause=lambda s: None)
+    monkeypatch.setattr(henrik.time, "sleep", lambda s: slept.append(s))
+    calls = [0]
+
+    def fake_request(url, params=None):
+        calls[0] += 1
+        if calls[0] == 1:
+            return _Resp(429, {}, {"x-ratelimit-reset": "2"})
+        return _Resp(200, {"data": {"ok": True}}, {"x-ratelimit-remaining": "50"})
+
+    monkeypatch.setattr(c, "_request", fake_request)
+    assert c.get_match_detail("m", "na") == {"ok": True}
+    assert slept == [2]
+
+
+def test_get_match_detail_non_200_raises(monkeypatch):
+    c = henrik.HenrikClient(api_key="k")
+    monkeypatch.setattr(c, "_request", lambda url, params=None: _Resp(500, {}, {}))
+    try:
+        c.get_match_detail("m", "na")
+        assert False, "expected HenrikError"
+    except henrik.HenrikError:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # Rate-limit / throttle helpers
 # ---------------------------------------------------------------------------
 

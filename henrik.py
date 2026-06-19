@@ -164,3 +164,25 @@ class HenrikClient:
                 "after": results.get("after", 0),
             }
         raise HenrikError("Stored matches fetch failed: too many 429s")
+
+    def get_match_detail(self, match_id, region):
+        """Fetch a full match via GET /valorant/v4/match/{region}/{match_id}.
+
+        Returns the `data` payload. 429 → bounded pause+retry; other non-200 → HenrikError.
+        """
+        url = (f"{config.API_BASE}/valorant/v4/match"
+               f"/{quote(region, safe='')}/{quote(match_id, safe='')}")
+        for _attempt in range(5):
+            resp = self._request(url)
+            if resp.status_code == 429:
+                wait = int(resp.headers.get("x-ratelimit-reset", "60"))
+                if self.on_pause:
+                    self.on_pause(wait)
+                time.sleep(wait)
+                continue
+            if resp.status_code != 200:
+                raise HenrikError(f"Match detail fetch failed ({resp.status_code})")
+            data = resp.json().get("data") or {}
+            self._sleep_if_throttled(resp)
+            return data
+        raise HenrikError("Match detail fetch failed: too many 429s")

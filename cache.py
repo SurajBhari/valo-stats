@@ -8,6 +8,10 @@ def _path(puuid):
     return os.path.join(config.CACHE_DIR, puuid, "matches.json")
 
 
+def _details_path(puuid):
+    return os.path.join(config.CACHE_DIR, puuid, "details.json")
+
+
 def load_matches(puuid):
     path = _path(puuid)
     if not os.path.exists(path):
@@ -21,6 +25,22 @@ def save_matches(puuid, matches):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(matches, f)
+
+
+def load_details(puuid):
+    """Return {match_id: detail_dict} for this player ({} if absent)."""
+    path = _details_path(puuid)
+    if not os.path.exists(path):
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_details(puuid, mapping):
+    path = _details_path(puuid)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(mapping, f)
 
 
 def merge_matches(existing, new):

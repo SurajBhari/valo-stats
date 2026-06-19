@@ -23,3 +23,15 @@ def test_load_missing_returns_empty(tmp_path, monkeypatch):
 def test_newest_timestamp():
     assert cache.newest_timestamp([{"timestamp": 1.0}, {"timestamp": 9.0}]) == 9.0
     assert cache.newest_timestamp([]) is None
+
+
+def test_details_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setattr(cache.config, "CACHE_DIR", str(tmp_path))
+    mapping = {"m1": {"agent": "Jett", "weapons": {"Vandal": 5}}}
+    cache.save_details("puuid1", mapping)
+    assert cache.load_details("puuid1") == mapping
+
+
+def test_load_details_missing_returns_empty(tmp_path, monkeypatch):
+    monkeypatch.setattr(cache.config, "CACHE_DIR", str(tmp_path))
+    assert cache.load_details("nope") == {}
