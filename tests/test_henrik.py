@@ -1,4 +1,4 @@
-"""Tests for henrik.py — DR1: raw endpoint + Riot-format normalizer."""
+"""Tests for henrik.py — SR1: stored-matches client + normalizer."""
 import henrik
 import valorant_content as vc
 
@@ -18,7 +18,7 @@ class _Resp:
 
 
 # ---------------------------------------------------------------------------
-# valorant_content helpers
+# valorant_content helpers (unchanged — still used by the project)
 # ---------------------------------------------------------------------------
 
 def test_agent_name_known():
@@ -34,7 +34,6 @@ def test_map_name_known():
 
 
 def test_map_name_unknown_falls_back_to_last_segment():
-    # Unknown path → last non-empty segment
     assert vc.map_name("/Game/Maps/NewMap/NewMap") == "NewMap"
 
 
@@ -51,319 +50,315 @@ def test_weapon_name_unknown():
 
 
 # ---------------------------------------------------------------------------
-# normalize_raw_match
+# normalize_stored_match
 # ---------------------------------------------------------------------------
 
-PUUID = "player-uuid-1"
-OTHER_PUUID = "player-uuid-2"
-
-# Minimal synthetic raw match: 2 rounds, player on Blue team
-_RAW_MATCH = {
-    "matchInfo": {
-        "matchId": "match-abc",
-        "mapId": "/Game/Maps/Ascent/Ascent",
-        "queueId": "competitive",
-        "gameStartMillis": 1_700_000_000_000,  # 1700000000.0 seconds
+# Synthetic stored-match row (win — Blue team wins 13-9)
+_WIN_ROW = {
+    "meta": {
+        "id": "stored-match-1",
+        "map": {"id": "/Game/Maps/Ascent/Ascent", "name": "Ascent"},
+        "version": "09.04.00.2176853",
+        "mode": "Competitive",
+        "started_at": "2026-06-19T00:03:59.978Z",
+        "season": {"id": "act-id", "short": "e9a3"},
+        "region": "na",
+        "cluster": "us-east",
     },
-    "players": [
-        {
-            "subject": PUUID,
-            "teamId": "Blue",
-            "characterId": "add6443a-41bd-e414-f6ad-e58d267f4e95",  # Jett
-            "stats": {"kills": 20, "deaths": 8, "assists": 3, "score": 5000},
-        },
-        {
-            "subject": OTHER_PUUID,
-            "teamId": "Red",
-            "characterId": "a3bfb853-43b2-7238-a4f1-ad90e9e46bcc",  # Reyna
-            "stats": {"kills": 10, "deaths": 15, "assists": 1, "score": 2000},
-        },
-    ],
-    "teams": [
-        {"teamId": "Blue", "won": True, "roundsWon": 13},
-        {"teamId": "Red",  "won": False, "roundsWon": 5},
-    ],
-    "roundResults": [
-        {
-            "playerStats": [
-                {
-                    "subject": PUUID,
-                    "damage": [
-                        {"receiver": OTHER_PUUID, "headshots": 2, "bodyshots": 5, "legshots": 1, "damage": 300},
-                        {"receiver": OTHER_PUUID, "headshots": 1, "bodyshots": 3, "legshots": 0, "damage": 150},
-                    ],
-                },
-                {
-                    "subject": OTHER_PUUID,
-                    "damage": [
-                        {"receiver": PUUID, "headshots": 0, "bodyshots": 4, "legshots": 1, "damage": 120},
-                    ],
-                },
-            ]
-        },
-        {
-            "playerStats": [
-                {
-                    "subject": PUUID,
-                    "damage": [
-                        {"receiver": OTHER_PUUID, "headshots": 3, "bodyshots": 2, "legshots": 1, "damage": 250},
-                    ],
-                },
-                {
-                    "subject": OTHER_PUUID,
-                    "damage": [
-                        {"receiver": PUUID, "headshots": 0, "bodyshots": 2, "legshots": 0, "damage": 80},
-                    ],
-                },
-            ]
-        },
-    ],
+    "stats": {
+        "puuid": "player-uuid-1",
+        "name": "TestPlayer",
+        "tag": "1234",
+        "team": "Blue",
+        "level": 200,
+        "character": {"id": "char-uuid", "name": "Raze"},
+        "tier": {"id": 21, "name": "Immortal 1"},
+        "score": 4800,
+        "kills": 18,
+        "deaths": 10,
+        "assists": 4,
+        "shots": {"head": 30, "body": 120, "leg": 10},
+        "damage": {"made": 2800, "received": 1800},
+    },
+    "teams": {"red": 9, "blue": 13},
+}
+
+# Loss row — Red team: red=5 rounds, blue=13 rounds, player on Red
+_LOSS_ROW = {
+    "meta": {
+        "id": "stored-match-2",
+        "map": {"id": "/Game/Maps/Bind/Bind", "name": "Bind"},
+        "version": "09.04.00.2176853",
+        "mode": "Competitive",
+        "started_at": "2026-06-18T12:00:00.000Z",
+        "season": {"id": "act-id", "short": "e9a3"},
+        "region": "na",
+        "cluster": "us-east",
+    },
+    "stats": {
+        "puuid": "player-uuid-1",
+        "name": "TestPlayer",
+        "tag": "1234",
+        "team": "Red",
+        "level": 200,
+        "character": {"id": "char-uuid2", "name": "Jett"},
+        "tier": {"id": 21, "name": "Immortal 1"},
+        "score": 2100,
+        "kills": 8,
+        "deaths": 15,
+        "assists": 2,
+        "shots": {"head": 10, "body": 80, "leg": 5},
+        "damage": {"made": 1200, "received": 2600},
+    },
+    "teams": {"red": 5, "blue": 13},
+}
+
+# Draw row — 12-12
+_DRAW_ROW = {
+    "meta": {
+        "id": "stored-match-3",
+        "map": {"id": "/Game/Maps/Haven/Haven", "name": "Haven"},
+        "version": "09.04.00.2176853",
+        "mode": "Competitive",
+        "started_at": "2026-06-17T08:00:00.000Z",
+        "season": {"id": "act-id", "short": "e9a3"},
+        "region": "na",
+        "cluster": "us-east",
+    },
+    "stats": {
+        "puuid": "player-uuid-1",
+        "name": "TestPlayer",
+        "tag": "1234",
+        "team": "Blue",
+        "level": 200,
+        "character": {"id": "char-uuid3", "name": "Sage"},
+        "tier": {"id": 21, "name": "Immortal 1"},
+        "score": 3000,
+        "kills": 14,
+        "deaths": 14,
+        "assists": 5,
+        "shots": {"head": 20, "body": 90, "leg": 8},
+        "damage": {"made": 2000, "received": 2000},
+    },
+    "teams": {"red": 12, "blue": 12},
 }
 
 
-def test_normalize_raw_match_puuid_present():
-    m = henrik.normalize_raw_match(_RAW_MATCH, PUUID)
-    assert m is not None
-    assert m["id"] == "match-abc"
+def test_normalize_stored_match_win_all_keys():
+    """Win row: assert all 18 keys, correct values."""
+    m = henrik.normalize_stored_match(_WIN_ROW)
+
+    # All 18 required keys must be present
+    expected_keys = {
+        "id", "started_at", "timestamp", "map", "mode",
+        "agent", "team", "won", "rounds",
+        "kills", "deaths", "assists", "score",
+        "head", "body", "leg",
+        "damage_made", "damage_received",
+    }
+    assert set(m.keys()) == expected_keys
+
+    assert m["id"] == "stored-match-1"
+    assert m["started_at"] == "2026-06-19T00:03:59.978Z"
+    # 2026-06-19T00:03:59.978Z → epoch seconds (parse via fromisoformat)
+    from datetime import datetime, timezone
+    expected_ts = datetime.fromisoformat("2026-06-19T00:03:59.978+00:00").timestamp()
+    assert abs(m["timestamp"] - expected_ts) < 0.001
     assert m["map"] == "Ascent"
     assert m["mode"] == "Competitive"
-    assert m["agent"] == "Jett"
+    assert m["agent"] == "Raze"
     assert m["team"] == "Blue"
     assert m["won"] is True
-    assert m["timestamp"] == 1_700_000_000.0
-    assert m["rounds"] == 2
-    assert m["kills"] == 20
-    assert m["deaths"] == 8
-    assert m["assists"] == 3
-    assert m["score"] == 5000
-    # head/body/leg/damage_made summed across both rounds for PUUID
-    # Round 1: head=2+1=3, body=5+3=8, leg=1+0=1, dmg_made=300+150=450
-    # Round 2: head=3, body=2, leg=1, dmg_made=250
-    assert m["head"] == 6
-    assert m["body"] == 10
-    assert m["leg"] == 2
-    assert m["damage_made"] == 700
-    # damage_received: round1=120, round2=80
-    assert m["damage_received"] == 200
+    assert m["rounds"] == 22          # 9 + 13
+    assert m["kills"] == 18
+    assert m["deaths"] == 10
+    assert m["assists"] == 4
+    assert m["score"] == 4800
+    assert m["head"] == 30
+    assert m["body"] == 120
+    assert m["leg"] == 10
+    assert m["damage_made"] == 2800
+    assert m["damage_received"] == 1800
 
 
-def test_normalize_raw_match_puuid_absent():
-    result = henrik.normalize_raw_match(_RAW_MATCH, "not-in-match-uuid")
-    assert result is None
-
-
-def test_normalize_raw_match_won_from_team_rounds():
-    """won is derived from roundsWon comparison, not just the 'won' flag."""
-    raw = {
-        "matchInfo": {"matchId": "x", "mapId": "", "queueId": "unrated", "gameStartMillis": 0},
-        "players": [{"subject": PUUID, "teamId": "Red", "characterId": "", "stats": {}}],
-        "teams": [
-            {"teamId": "Red",  "won": False, "roundsWon": 11},
-            {"teamId": "Blue", "won": True,  "roundsWon": 13},
-        ],
-        "roundResults": [],
-    }
-    m = henrik.normalize_raw_match(raw, PUUID)
+def test_normalize_stored_match_loss():
+    m = henrik.normalize_stored_match(_LOSS_ROW)
     assert m["won"] is False
+    assert m["rounds"] == 18          # 5 + 13
+    assert m["map"] == "Bind"
+    assert m["agent"] == "Jett"
+    assert m["team"] == "Red"
 
 
-def test_normalize_raw_match_draw():
-    raw = {
-        "matchInfo": {"matchId": "x", "mapId": "", "queueId": "unrated", "gameStartMillis": 0},
-        "players": [{"subject": PUUID, "teamId": "Red", "characterId": "", "stats": {}}],
-        "teams": [
-            {"teamId": "Red",  "won": False, "roundsWon": 12},
-            {"teamId": "Blue", "won": False, "roundsWon": 12},
-        ],
-        "roundResults": [],
-    }
-    m = henrik.normalize_raw_match(raw, PUUID)
+def test_normalize_stored_match_draw():
+    m = henrik.normalize_stored_match(_DRAW_ROW)
     assert m["won"] is None
+    assert m["rounds"] == 24          # 12 + 12
 
 
-# ---------------------------------------------------------------------------
-# get_match_history
-# ---------------------------------------------------------------------------
-
-_HISTORY_RESP = {
-    "data": {
-        "History": [
-            {"MatchID": "mid-1", "GameStartTime": 1_700_000_000_000, "QueueID": "competitive"},
-            {"MatchID": "mid-2", "GameStartTime": 1_699_900_000_000, "QueueID": "competitive"},
-        ]
+def test_normalize_stored_match_missing_map_falls_back():
+    """If meta.map is missing/None, map should fallback to 'Unknown'."""
+    row = {
+        "meta": {
+            "id": "x",
+            "map": None,
+            "mode": "Competitive",
+            "started_at": "2026-06-19T00:00:00.000Z",
+        },
+        "stats": {
+            "team": "Blue",
+            "character": {"name": "Raze"},
+            "score": 0, "kills": 0, "deaths": 0, "assists": 0,
+            "shots": {"head": 0, "body": 0, "leg": 0},
+            "damage": {"made": 0, "received": 0},
+        },
+        "teams": {"red": 5, "blue": 13},
     }
+    m = henrik.normalize_stored_match(row)
+    assert m["map"] == "Unknown"
+
+
+def test_normalize_stored_match_missing_character_falls_back():
+    """If stats.character is missing/None, agent should fallback to 'Unknown'."""
+    row = {
+        "meta": {
+            "id": "x",
+            "map": {"id": "", "name": "Ascent"},
+            "mode": "Competitive",
+            "started_at": "2026-06-19T00:00:00.000Z",
+        },
+        "stats": {
+            "team": "Blue",
+            "character": None,
+            "score": 0, "kills": 0, "deaths": 0, "assists": 0,
+            "shots": {"head": 0, "body": 0, "leg": 0},
+            "damage": {"made": 0, "received": 0},
+        },
+        "teams": {"red": 5, "blue": 13},
+    }
+    m = henrik.normalize_stored_match(row)
+    assert m["agent"] == "Unknown"
+
+
+# ---------------------------------------------------------------------------
+# get_stored_matches
+# ---------------------------------------------------------------------------
+
+_STORED_RESP = {
+    "results": {"total": 446, "returned": 2, "before": 0, "after": 421},
+    "data": [_WIN_ROW, _LOSS_ROW],
 }
 
 
-def test_get_match_history_parses_and_converts_ms_to_seconds(monkeypatch):
+def test_get_stored_matches_returns_normalized_list(monkeypatch):
+    """200 response → matches list, total, after."""
+    captured_params = []
+
+    def fake_request(url, params=None):
+        captured_params.append(params)
+        return _Resp(200, _STORED_RESP, {"x-ratelimit-remaining": "50"})
+
     c = henrik.HenrikClient(api_key="k")
-    monkeypatch.setattr(c, "_post", lambda body: _Resp(200, _HISTORY_RESP, {"x-ratelimit-remaining": "50"}))
-    result = c.get_match_history("puuid-x", "na", 0, 25, "competitive")
-    assert len(result) == 2
-    assert result[0] == {"match_id": "mid-1", "timestamp": 1_700_000_000.0}
-    assert result[1] == {"match_id": "mid-2", "timestamp": 1_699_900_000.0}
+    monkeypatch.setattr(c, "_request", fake_request)
+
+    result = c.get_stored_matches("puuid-x", "na", 1, 25, "competitive")
+    assert result["total"] == 446
+    assert result["after"] == 421
+    matches = result["matches"]
+    assert len(matches) == 2
+    assert matches[0]["id"] == "stored-match-1"
+    assert matches[1]["id"] == "stored-match-2"
+    # Verify normalized keys present
+    assert "agent" in matches[0]
+    assert "won" in matches[0]
 
 
-def test_get_match_history_400_means_end_of_history(monkeypatch):
-    """Riot's match-history endpoint returns 400 when startIndex is past the
-    available history. Treat that as end-of-history (return []), NOT an error,
-    so the scan stops gracefully instead of crashing the job."""
+def test_get_stored_matches_mode_omitted_when_none(monkeypatch):
+    """When mode=None, 'mode' key must NOT be in request params."""
+    captured_params = []
+
+    def fake_request(url, params=None):
+        captured_params.append(params or {})
+        return _Resp(200, {"results": {"total": 0, "returned": 0, "before": 0, "after": 0}, "data": []},
+                     {"x-ratelimit-remaining": "50"})
+
     c = henrik.HenrikClient(api_key="k")
-    monkeypatch.setattr(c, "_post", lambda body: _Resp(400, {}, {}))
-    assert c.get_match_history("puuid-x", "na", 50, 75, "competitive") == []
+    monkeypatch.setattr(c, "_request", fake_request)
+    c.get_stored_matches("puuid-x", "na", 1, 25, None)
+    assert "mode" not in captured_params[0]
 
 
-def test_get_match_history_other_errors_still_raise(monkeypatch):
-    """Non-400 failures (e.g. 500) must still raise, not be swallowed."""
+def test_get_stored_matches_mode_present_when_set(monkeypatch):
+    """When mode='competitive', 'mode' key must appear in request params."""
+    captured_params = []
+
+    def fake_request(url, params=None):
+        captured_params.append(params or {})
+        return _Resp(200, {"results": {"total": 0, "returned": 0, "before": 0, "after": 0}, "data": []},
+                     {"x-ratelimit-remaining": "50"})
+
     c = henrik.HenrikClient(api_key="k")
-    monkeypatch.setattr(c, "_post", lambda body: _Resp(500, {}, {}))
+    monkeypatch.setattr(c, "_request", fake_request)
+    c.get_stored_matches("puuid-x", "na", 1, 25, "competitive")
+    assert captured_params[0].get("mode") == "competitive"
+
+
+def test_get_stored_matches_url_contains_region_and_puuid(monkeypatch):
+    """URL must include the region and puuid path segments."""
+    captured_urls = []
+
+    def fake_request(url, params=None):
+        captured_urls.append(url)
+        return _Resp(200, {"results": {"total": 0, "returned": 0, "before": 0, "after": 0}, "data": []},
+                     {"x-ratelimit-remaining": "50"})
+
+    c = henrik.HenrikClient(api_key="k")
+    monkeypatch.setattr(c, "_request", fake_request)
+    c.get_stored_matches("test-puuid-abc", "eu", 1, 25, None)
+    assert "eu" in captured_urls[0]
+    assert "test-puuid-abc" in captured_urls[0]
+    assert "stored-matches" in captured_urls[0]
+
+
+def test_get_stored_matches_429_retries_then_succeeds(monkeypatch):
+    """429 → pause + retry → 200 on second call → return data."""
+    slept = []
+    paused = []
+    c = henrik.HenrikClient(api_key="k", on_pause=lambda s: paused.append(s))
+    monkeypatch.setattr(henrik.time, "sleep", lambda s: slept.append(s))
+
+    call_count = [0]
+
+    def fake_request(url, params=None):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            return _Resp(429, {}, {"x-ratelimit-reset": "3"})
+        return _Resp(200,
+                     {"results": {"total": 0, "returned": 0, "before": 0, "after": 0}, "data": []},
+                     {"x-ratelimit-remaining": "50"})
+
+    monkeypatch.setattr(c, "_request", fake_request)
+    result = c.get_stored_matches("puuid-x", "na", 1, 25, "competitive")
+    assert slept == [3]
+    assert paused == [3]
+    assert result["matches"] == []
+    assert call_count[0] == 2
+
+
+def test_get_stored_matches_500_raises_henrik_error(monkeypatch):
+    """Non-200 non-429 → raises HenrikError."""
+    c = henrik.HenrikClient(api_key="k")
+    monkeypatch.setattr(c, "_request", lambda url, params=None: _Resp(500, {}, {}))
     try:
-        c.get_match_history("puuid-x", "na", 0, 25, "competitive")
+        c.get_stored_matches("puuid-x", "na", 1, 25, "competitive")
         assert False, "expected HenrikError"
     except henrik.HenrikError:
         pass
 
 
-def test_get_match_history_queue_none_omits_filter(monkeypatch):
-    """When queue is None, the queries string must NOT contain '&queue='."""
-    captured_bodies = []
-
-    def fake_post(body):
-        captured_bodies.append(body)
-        return _Resp(200, {"data": {"History": []}}, {"x-ratelimit-remaining": "50"})
-
-    c = henrik.HenrikClient(api_key="k")
-    monkeypatch.setattr(c, "_post", fake_post)
-    c.get_match_history("puuid-x", "na", 0, 25, None)
-    assert len(captured_bodies) == 1
-    assert "&queue=" not in captured_bodies[0]["queries"]
-
-
-def test_get_match_history_queue_set_includes_filter(monkeypatch):
-    """When queue is 'competitive', queries must include '&queue=competitive'."""
-    captured_bodies = []
-
-    def fake_post(body):
-        captured_bodies.append(body)
-        return _Resp(200, {"data": {"History": []}}, {"x-ratelimit-remaining": "50"})
-
-    c = henrik.HenrikClient(api_key="k")
-    monkeypatch.setattr(c, "_post", fake_post)
-    c.get_match_history("puuid-x", "na", 0, 25, "competitive")
-    assert "&queue=competitive" in captured_bodies[0]["queries"]
-
-
-def test_get_match_history_start_end_in_queries(monkeypatch):
-    captured_bodies = []
-
-    def fake_post(body):
-        captured_bodies.append(body)
-        return _Resp(200, {"data": {"History": []}}, {"x-ratelimit-remaining": "50"})
-
-    c = henrik.HenrikClient(api_key="k")
-    monkeypatch.setattr(c, "_post", fake_post)
-    c.get_match_history("puuid-x", "na", 25, 50, "competitive")
-    q = captured_bodies[0]["queries"]
-    assert "startIndex=25" in q
-    assert "endIndex=50" in q
-
-
-def test_get_match_history_429_retries_and_pauses(monkeypatch):
-    """429 → pause + retry (bounded, max 5)."""
-    slept = []
-    paused = []
-    c = henrik.HenrikClient(api_key="k", on_pause=lambda s: paused.append(s))
-    monkeypatch.setattr(henrik.time, "sleep", lambda s: slept.append(s))
-
-    call_count = [0]
-
-    def fake_post(body):
-        call_count[0] += 1
-        if call_count[0] == 1:
-            return _Resp(429, {}, {"x-ratelimit-reset": "3"})
-        return _Resp(200, {"data": {"History": []}}, {"x-ratelimit-remaining": "50"})
-
-    monkeypatch.setattr(c, "_post", fake_post)
-    result = c.get_match_history("puuid-x", "na", 0, 25, "competitive")
-    assert slept == [3]
-    assert paused == [3]
-    assert result == []
-
-
 # ---------------------------------------------------------------------------
-# get_match_details
+# get_account (unchanged)
 # ---------------------------------------------------------------------------
-
-_DETAILS_RESP = {
-    "data": {"matchInfo": {"matchId": "mid-1"}, "players": [], "teams": [], "roundResults": []}
-}
-
-
-def test_get_match_details_returns_data_on_200(monkeypatch):
-    c = henrik.HenrikClient(api_key="k")
-    monkeypatch.setattr(c, "_post", lambda body: _Resp(200, _DETAILS_RESP, {"x-ratelimit-remaining": "50"}))
-    result = c.get_match_details("mid-1", "na")
-    assert result is not None
-    assert result["matchInfo"]["matchId"] == "mid-1"
-
-
-def test_get_match_details_returns_none_on_non_200(monkeypatch):
-    c = henrik.HenrikClient(api_key="k")
-    monkeypatch.setattr(c, "_post", lambda body: _Resp(404, {}, {}))
-    result = c.get_match_details("bad-id", "na")
-    assert result is None
-
-
-def test_get_match_details_returns_none_on_500(monkeypatch):
-    c = henrik.HenrikClient(api_key="k")
-    monkeypatch.setattr(c, "_post", lambda body: _Resp(500, {}, {}))
-    result = c.get_match_details("bad-id", "na")
-    assert result is None
-
-
-def test_get_match_details_429_retries_and_returns_data(monkeypatch):
-    """429 on first call → pause + retry → 200 on second call → return data."""
-    slept = []
-    paused = []
-    c = henrik.HenrikClient(api_key="k", on_pause=lambda s: paused.append(s))
-    monkeypatch.setattr(henrik.time, "sleep", lambda s: slept.append(s))
-
-    call_count = [0]
-
-    def fake_post(body):
-        call_count[0] += 1
-        if call_count[0] == 1:
-            return _Resp(429, {}, {"x-ratelimit-reset": "4"})
-        return _Resp(200, _DETAILS_RESP, {"x-ratelimit-remaining": "50"})
-
-    monkeypatch.setattr(c, "_post", fake_post)
-    result = c.get_match_details("mid-1", "na")
-    assert slept == [4]
-    assert paused == [4]
-    assert result is not None
-    assert result["matchInfo"]["matchId"] == "mid-1"
-
-
-# ---------------------------------------------------------------------------
-# _post rate-limit pause
-# ---------------------------------------------------------------------------
-
-def test_post_triggers_rate_limit_pause(monkeypatch):
-    """_sleep_if_throttled must be called after a successful POST."""
-    slept = []
-    paused = []
-    c = henrik.HenrikClient(api_key="k", on_pause=lambda s: paused.append(s))
-    monkeypatch.setattr(henrik.time, "sleep", lambda s: slept.append(s))
-
-    def fake_requests_post(url, json=None, headers=None, timeout=None):
-        return _Resp(200, _DETAILS_RESP, {"x-ratelimit-remaining": "1", "x-ratelimit-reset": "5"})
-
-    monkeypatch.setattr(henrik.requests, "post", fake_requests_post)
-    result = c._post({"type": "matchdetails", "value": "mid-1", "region": "na", "queries": ""})
-    assert slept == [5]
-    assert paused == [5]
-
-
 
 def test_get_account_url_encodes_slash(monkeypatch):
     """A name containing '/' must be percent-encoded to prevent path injection."""
@@ -380,6 +375,10 @@ def test_get_account_url_encodes_slash(monkeypatch):
     assert "bad%2Fname" in captured[0]
     assert "bad/name" not in captured[0]
 
+
+# ---------------------------------------------------------------------------
+# Rate-limit / throttle helpers
+# ---------------------------------------------------------------------------
 
 def test_pause_when_throttled(monkeypatch):
     slept = []
