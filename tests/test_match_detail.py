@@ -193,6 +193,19 @@ def test_trade_kills_and_traded_deaths():
     assert d["traded_deaths"] == 1
 
 
+def test_placement():
+    payload = {
+        "metadata": {}, "rounds": [], "kills": [],
+        "players": [
+            {"puuid": ME, "team_id": "Red", "agent": {"name": "Jett"}, "stats": {"score": 300}},
+            {"puuid": MATE, "team_id": "Red", "stats": {"score": 400}},
+            {"puuid": ENEMY1, "team_id": "Blue", "stats": {"score": 200}},
+        ],
+    }
+    d = match_detail.extract_detail(payload, ME)
+    assert d["placement"] == 2  # only MATE (400) outscores my 300
+
+
 def test_missing_player_safe():
     d = match_detail.extract_detail(_payload(), "NOT-IN-MATCH")
     assert d["agent"] == "Unknown"

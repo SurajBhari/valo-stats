@@ -84,8 +84,11 @@ def aggregate_details(details):
                 rec["wins"] += 1
 
     n = len(details)
+    total_wk = sum(weapons.values())
     weapon_list = sorted(
-        ({"name": name, "kills": kills} for name, kills in weapons.items()),
+        ({"name": name, "kills": kills,
+          "usage_pct": round(kills / total_wk * 100, 1) if total_wk else 0.0}
+         for name, kills in weapons.items()),
         key=lambda w: w["kills"], reverse=True,
     )
     opening_total = first_bloods + opening_deaths

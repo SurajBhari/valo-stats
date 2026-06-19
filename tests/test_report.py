@@ -56,13 +56,16 @@ def _player():
     return {"name": "WackyDipu", "tag": "Live", "region": "ap"}
 
 
-def _populated_agg():
-    matches = [
+def _pop_matches():
+    return [
         _match(1, True), _match(2, True), _match(3, False),
         _match(4, True, agent="Sage", map_="Bind"),
         _match(5, None, agent="Sage", map_="Bind"),
     ]
-    return stats.aggregate(matches)
+
+
+def _populated_agg():
+    return stats.aggregate(_pop_matches())
 
 
 def test_render_html_populated():
@@ -158,13 +161,15 @@ def _stub_urls(monkeypatch):
     monkeypatch.setattr(assets, "map_icon_url", lambda n: f"http://m/{n}")
     monkeypatch.setattr(assets, "weapon_icon_url", lambda n: f"http://w/{n}")
     monkeypatch.setattr(assets, "card_url", lambda u: "http://card" if u else None)
+    monkeypatch.setattr(assets, "agent_role", lambda n: "Duelist" if n == "Jett" else "Controller")
 
 
 def test_build_report_data_structure(monkeypatch):
     _stub_urls(monkeypatch)
     player = dict(_player(), card="cid", level=321, rank_tier="Diamond 3",
-                  rr=41, rank_icon_url="http://rank")
-    data = report.build_report_data(_populated_agg(), player, details=_details())
+                  rr=41, rank_icon_url="http://rank", peak="Ascendant 3")
+    data = report.build_report_data(_populated_agg(), player, details=_details(),
+                                    matches=_pop_matches())
 
     assert data["player"]["name"] == "WackyDipu"
     assert data["player"]["card_url"] == "http://card"
@@ -179,7 +184,13 @@ def test_build_report_data_structure(monkeypatch):
     json.dumps(data)
     assert "overview" in data and "trends" in data and "activity" in data
     assert data["detail"]["weapons"][0]["icon_url"].startswith("http://w/")
+    assert "usage_pct" in data["detail"]["weapons"][0]
     assert isinstance(data["tips"], list)
+    # tracker-style additions
+    assert data["player"]["peak"] == "Ascendant 3"
+    assert any(r["role"] == "Duelist" for r in data["per_role"])
+    assert data["accuracy"]["head"] >= 0 and "head_pct" in data["accuracy"]
+    assert isinstance(data["recent_matches"], list)
 
 
 def test_build_report_data_no_details(monkeypatch):

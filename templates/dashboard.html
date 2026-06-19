@@ -74,7 +74,7 @@
         <h1>{{ data.player.name }}<span class="accent">#{{ data.player.tag }}</span></h1>
         <div class="meta">{{ data.player.region|upper }}{% if data.player.level %} · Level {{ data.player.level }}{% endif %}</div>
       </div>
-      {% if data.player.rank_url %}<div class="rank"><img src="{{ data.player.rank_url }}" alt="">{% if data.player.rank_tier %}<div class="t">{{ data.player.rank_tier }}{% if data.player.rr is not none %} · {{ data.player.rr }}RR{% endif %}</div>{% endif %}</div>{% endif %}
+      {% if data.player.rank_url %}<div class="rank"><img src="{{ data.player.rank_url }}" alt="">{% if data.player.rank_tier %}<div class="t">{{ data.player.rank_tier }}{% if data.player.rr is not none %} · {{ data.player.rr }}RR{% endif %}</div>{% endif %}{% if data.player.peak %}<div class="t" style="color:#8a90a2;">Peak: {{ data.player.peak }}</div>{% endif %}</div>{% endif %}
     </div>
   </div>
 
@@ -86,7 +86,8 @@
     <div class="kpi"><div class="v">{{ data.overview.adr }}</div><div class="l">ADR</div></div>
   </div>
 
-  <div class="kpis" style="grid-template-columns:repeat(4,1fr); margin-top:-8px;">
+  <div class="kpis" style="grid-template-columns:repeat(5,1fr); margin-top:-8px;">
+    <div class="kpi"><div class="v">{{ data.overview.kd }}</div><div class="l">K / D</div></div>
     <div class="kpi"><div class="v">{{ data.overview.kpr }}</div><div class="l">Kills / round</div></div>
     <div class="kpi"><div class="v">{{ data.overview.dpr }}</div><div class="l">Deaths / round</div></div>
     <div class="kpi"><div class="v">{{ data.overview.apr }}</div><div class="l">Assists / round</div></div>
@@ -121,6 +122,10 @@
     <div class="tile"><div class="v">{{ data.detail.sides.defense.winrate }}%</div><div class="l">Defense WR</div></div>
     <div class="tile"><div class="v">{{ data.detail.playtime.total_hours }}h</div><div class="l">Playtime</div></div>
     <div class="tile"><div class="v">{{ data.detail.playtime.avg_minutes }}m</div><div class="l">Avg match</div></div>
+    <div class="tile"><div class="v">{{ data.detail.combat.survival_pct }}%</div><div class="l">Survival</div></div>
+    <div class="tile"><div class="v">{{ data.detail.combat.flawless }}</div><div class="l">Flawless rds</div></div>
+    <div class="tile"><div class="v">{{ data.detail.combat.trade_kills }}</div><div class="l">Trade kills</div></div>
+    <div class="tile"><div class="v">{{ data.detail.combat.traded_deaths }}</div><div class="l">Traded deaths</div></div>
     <div class="tile"><div class="v">{{ data.detail.economy.spent_avg|round|int }}</div><div class="l">Avg spend</div></div>
   </div>
   <div class="grid" style="margin-top:16px;">
@@ -159,6 +164,41 @@
   <div class="card">
     <table><tr><th>Player</th><th>Games</th><th>Winrate</th></tr>
     {% for tm in data.detail.teammates[:10] %}<tr><td>{{ tm.name }}</td><td>{{ tm.games }}</td><td>{{ tm.winrate }}%</td></tr>{% endfor %}
+    </table>
+  </div>
+  {% endif %}
+
+  {% if data.per_role %}
+  <h2>Role performance</h2>
+  <div class="card">
+    <table><tr><th>Role</th><th>Games</th><th>Record</th><th>Win%</th><th>K/D</th><th>ACS</th><th>ADR</th><th>DDΔ</th></tr>
+    {% for r in data.per_role %}<tr><td>{{ r.role }}</td><td>{{ r.games }}</td><td>{{ r.wins }}W–{{ r.losses }}L</td>
+      <td>{{ r.winrate }}%</td><td>{{ r.kd }}</td><td>{{ r.acs }}</td><td>{{ r.adr }}</td><td>{{ r.dd_delta }}</td></tr>{% endfor %}
+    </table>
+  </div>
+  {% endif %}
+
+  <h2>Accuracy</h2>
+  <div class="card">
+    <table><tr><th></th><th>Head</th><th>Body</th><th>Legs</th></tr>
+      <tr><td class="muted">Hits</td><td>{{ data.accuracy.head }}</td><td>{{ data.accuracy.body }}</td><td>{{ data.accuracy.leg }}</td></tr>
+      <tr><td class="muted">Share</td><td>{{ data.accuracy.head_pct }}%</td><td>{{ data.accuracy.body_pct }}%</td><td>{{ data.accuracy.leg_pct }}%</td></tr>
+    </table>
+  </div>
+
+  {% if data.recent_matches %}
+  <h2>Recent matches</h2>
+  <div class="card">
+    <table><tr><th>Date</th><th>Map</th><th>Agent</th><th>Result</th><th>Place</th><th>K/D/A</th><th>ACS</th><th>DDΔ</th><th>HS%</th><th>Special</th></tr>
+    {% for m in data.recent_matches %}
+    <tr>
+      <td class="muted">{{ m.date }}</td><td>{{ m.map }}</td><td>{{ m.agent }}</td>
+      <td>{% if m.won == 1 %}<span style="color:#4ade80;">Win</span>{% elif m.won == 0 %}<span style="color:#ff4655;">Loss</span>{% else %}Draw{% endif %}</td>
+      <td>{% if m.placement %}{% if m.placement == 1 %}MVP{% else %}#{{ m.placement }}{% endif %}{% else %}—{% endif %}</td>
+      <td>{{ m.kills }}/{{ m.deaths }}/{{ m.assists }}</td><td>{{ m.acs }}</td><td>{{ m.dd_delta }}</td><td>{{ m.hs_pct }}%</td>
+      <td class="muted">{% if m.aces %}Ace {% endif %}{% if m.multikills['4k'] %}4K×{{ m.multikills['4k'] }} {% endif %}{% if m.multikills['3k'] %}3K×{{ m.multikills['3k'] }} {% endif %}{% if m.clutches %}Clutch×{{ m.clutches }}{% endif %}</td>
+    </tr>
+    {% endfor %}
     </table>
   </div>
   {% endif %}

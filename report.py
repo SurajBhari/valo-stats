@@ -49,6 +49,59 @@ def render_html(stats, player, details=None):
         trend_pts=trend_pts, max_hour_games=max_hour_games)
 
 
+def _per_role(matches):
+    """Aggregate matches by agent role (Duelist/Controller/Initiator/Sentinel)."""
+    roles = {}
+    for m in matches:
+        role = assets.agent_role(m["agent"]) or "Other"
+        r = roles.setdefault(role, {"role": role, "games": 0, "wins": 0, "k": 0,
+                                    "d": 0, "a": 0, "rounds": 0, "score": 0,
+                                    "dmade": 0, "drecv": 0})
+        r["games"] += 1
+        if m["won"] is True:
+            r["wins"] += 1
+        r["k"] += m["kills"]; r["d"] += m["deaths"]; r["a"] += m["assists"]
+        r["rounds"] += m["rounds"]; r["score"] += m["score"]
+        r["dmade"] += m["damage_made"]; r["drecv"] += m["damage_received"]
+    out = []
+    for r in roles.values():
+        g, rnd = r["games"], (r["rounds"] or 1)
+        out.append({
+            "role": r["role"], "games": g, "wins": r["wins"], "losses": g - r["wins"],
+            "winrate": round(r["wins"] / g * 100, 1) if g else 0.0,
+            "kd": round(r["k"] / r["d"], 2) if r["d"] else 0.0,
+            "kda": round((r["k"] + r["a"]) / (r["d"] or 1), 2),
+            "acs": round(r["score"] / rnd, 1), "adr": round(r["dmade"] / rnd, 1),
+            "dd_delta": round((r["dmade"] - r["drecv"]) / rnd, 1),
+        })
+    out.sort(key=lambda x: x["games"], reverse=True)
+    return out
+
+
+def _recent_matches(matches, detail_by_id, limit=20):
+    """Most-recent matches with per-match specials joined from cached details."""
+    recent = sorted(matches, key=lambda m: m["timestamp"], reverse=True)[:limit]
+    out = []
+    for m in recent:
+        dd = detail_by_id.get(m["id"]) or {}
+        rnd = m["rounds"] or 1
+        shots = m["head"] + m["body"] + m["leg"]
+        out.append({
+            "map": m["map"], "agent": m["agent"],
+            "won": (1 if m["won"] is True else 0 if m["won"] is False else None),
+            "kills": m["kills"], "deaths": m["deaths"], "assists": m["assists"],
+            "acs": round(m["score"] / rnd),
+            "dd_delta": round((m["damage_made"] - m["damage_received"]) / rnd),
+            "hs_pct": round(m["head"] / shots * 100, 1) if shots else 0.0,
+            "date": (m.get("started_at") or "")[:10],
+            "placement": dd.get("placement", 0),
+            "multikills": dd.get("multikills") or {},
+            "clutches": dd.get("clutches", 0),
+            "aces": (dd.get("multikills") or {}).get("5k", 0),
+        })
+    return out
+
+
 def build_report_data(stats, player, details=None, matches=None):
     """Assemble a JSON-serializable payload for the interactive web dashboard.
 
@@ -61,6 +114,7 @@ def build_report_data(stats, player, details=None, matches=None):
         for m in (matches or [])
     ]
     detail = None
+    detail_by_id = {dd.get("match_id"): dd for dd in (details or [])}
     if details:
         d = detail_stats.aggregate_details(details)
         for w in d["weapons"]:
@@ -68,13 +122,20 @@ def build_report_data(stats, player, details=None, matches=None):
         detail = d
 
     per_map = [dict(m, icon_url=assets.map_icon_url(m["name"])) for m in stats.get("per_map", [])]
-    per_agent = [dict(a, icon_url=assets.agent_icon_url(a["name"])) for a in stats.get("per_agent", [])]
+    per_agent = [dict(a, icon_url=assets.agent_icon_url(a["name"]),
+                      role=assets.agent_role(a["name"])) for a in stats.get("per_agent", [])]
+    per_role = _per_role(matches or [])
+    recent_matches = _recent_matches(matches or [], detail_by_id)
+    w = stats.get("weapons", {})
+    accuracy = {k: w.get(k, 0) for k in
+                ("head", "body", "leg", "head_pct", "body_pct", "leg_pct")}
 
     return {
         "player": {
             "name": player.get("name"), "tag": player.get("tag"),
             "region": player.get("region"), "level": player.get("level"),
             "rank_tier": player.get("rank_tier"), "rr": player.get("rr"),
+            "peak": player.get("peak"), "peak_season": player.get("peak_season"),
             "card_url": assets.card_url(player.get("card")),
             "rank_url": player.get("rank_icon_url"),
         },
@@ -82,6 +143,9 @@ def build_report_data(stats, player, details=None, matches=None):
         "trends": stats.get("trends", []),
         "per_map": per_map,
         "per_agent": per_agent,
+        "per_role": per_role,
+        "recent_matches": recent_matches,
+        "accuracy": accuracy,
         "weapons_shots": {
             "head": stats.get("weapons", {}).get("head", 0),
             "body": stats.get("weapons", {}).get("body", 0),

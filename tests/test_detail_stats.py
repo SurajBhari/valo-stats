@@ -42,7 +42,9 @@ def test_weapons_summed_and_sorted_desc():
         _detail({"Vandal": 3, "Sheriff": 4}),
     ]
     agg = detail_stats.aggregate_details(details)
-    assert agg["weapons"][0] == {"name": "Vandal", "kills": 8}
+    assert agg["weapons"][0]["name"] == "Vandal"
+    assert agg["weapons"][0]["kills"] == 8
+    assert "usage_pct" in agg["weapons"][0]
     names = [w["name"] for w in agg["weapons"]]
     kills = [w["kills"] for w in agg["weapons"]]
     assert kills == sorted(kills, reverse=True)

@@ -13,7 +13,8 @@ from collections import defaultdict
 # v3 tightened clutch definition to 1vX where X >= 2 (excludes 1v1s).
 # v4 added: KAST rounds, clutch_breakdown (1v1..1v5), attack/defense splits, game_length_ms.
 # v5 added: survival_rounds, flawless_rounds, trade_kills, traded_deaths.
-SCHEMA_VERSION = 5
+# v6 added: scoreboard placement (1 = top ACS in the lobby).
+SCHEMA_VERSION = 6
 
 # A death counts as "traded" for KAST if the killer dies within this window.
 TRADE_WINDOW_MS = 3000
@@ -30,6 +31,14 @@ def extract_detail(data, puuid):
     meta = data.get("metadata") or {}
 
     me = next((p for p in players if p.get("puuid") == puuid), None)
+
+    # --- scoreboard placement (1 = top ACS in the 10-player lobby) ---
+    if me:
+        my_score = (me.get("stats") or {}).get("score", 0)
+        placement = 1 + sum(1 for p in players
+                            if (p.get("stats") or {}).get("score", 0) > my_score)
+    else:
+        placement = 0
 
     # --- player-level fields ---
     if me:
@@ -113,6 +122,7 @@ def extract_detail(data, puuid):
         "v": SCHEMA_VERSION,
         "match_id": meta.get("match_id"),
         "agent": agent,
+        "placement": placement,
         "weapons": dict(weapons),
         "first_bloods": first_bloods,
         "opening_deaths": opening_deaths,

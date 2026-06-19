@@ -22,6 +22,7 @@ _agents = None
 _maps = None
 _weapons = None
 _borders = None
+_agent_roles = None
 
 
 def _to_data_uri(content, mime="image/png"):
@@ -127,6 +128,20 @@ def weapon_icon_url(name):
     if _weapons is None:
         _weapons = _name_map("weapons")
     return _weapons.get(name)
+
+
+def agent_role(name):
+    """Role name (Duelist/Controller/Initiator/Sentinel) for an agent, or None."""
+    global _agent_roles
+    if _agent_roles is None:
+        body = _get_json(f"{VAPI}/agents") or {}
+        _agent_roles = {}
+        for row in body.get("data") or []:
+            dn = row.get("displayName")
+            role = (row.get("role") or {}).get("displayName")
+            if dn and role:
+                _agent_roles[dn] = role
+    return _agent_roles.get(name)
 
 
 def card_url(uuid):

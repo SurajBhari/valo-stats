@@ -132,6 +132,8 @@ def _group(matches, key):
         a = sum(x["assists"] for x in ms)
         rounds = sum(x["rounds"] for x in ms)
         score = sum(x["score"] for x in ms)
+        dmg_made = sum(x["damage_made"] for x in ms)
+        dmg_recv = sum(x["damage_received"] for x in ms)
         shots = sum(x["head"] + x["body"] + x["leg"] for x in ms)
         out.append({
             "name": name,
@@ -139,7 +141,10 @@ def _group(matches, key):
             "wins": wins,
             "winrate": _winrate(wins, len(ms)),
             "kda": _kda(k, a, d),
+            "kd": round(_safe_div(k, d), 2),
             "acs": round(_safe_div(score, rounds), 1),
+            "adr": round(_safe_div(dmg_made, rounds), 1),
+            "dd_delta": round(_safe_div(dmg_made - dmg_recv, rounds), 1),
             "hs_pct": round(_safe_div(sum(x["head"] for x in ms), shots) * 100, 1),
         })
     out.sort(key=lambda x: x["matches"], reverse=True)
