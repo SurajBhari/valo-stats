@@ -93,6 +93,27 @@ def test_clutch_1v2_win_counted():
     assert d["clutches"] == 1
 
 
+def test_clutch_1v1_not_counted():
+    """A 1v1 last-alive win must NOT count as a clutch (only 1v2+)."""
+    payload = {
+        "metadata": {"match_id": "m-1v1"},
+        "players": [
+            {"puuid": ME, "name": "Me", "team_id": "Red", "agent": {"name": "Jett"}},
+            {"puuid": MATE, "name": "Mate", "team_id": "Red", "agent": {"name": "Sage"}},
+            {"puuid": ENEMY1, "name": "En1", "team_id": "Blue", "agent": {"name": "Reyna"}},
+            {"puuid": ENEMY2, "name": "En2", "team_id": "Blue", "agent": {"name": "Omen"}},
+        ],
+        "rounds": [{"winning_team": "Red", "plant": None, "defuse": None}],
+        "kills": [
+            _kill(0, 1000, MATE, ENEMY2, "Vandal"),    # MATE kills E2 → Blue=1 (E1)
+            _kill(0, 1500, ENEMY1, MATE, "Phantom"),   # E1 kills MATE → Red=1 (me), Blue=1 → 1v1
+            _kill(0, 2000, ME, ENEMY1, "Vandal"),      # I win the 1v1 (not a clutch)
+        ],
+    }
+    d = match_detail.extract_detail(payload, ME)
+    assert d["clutches"] == 0
+
+
 def test_missing_player_safe():
     d = match_detail.extract_detail(_payload(), "NOT-IN-MATCH")
     assert d["agent"] == "Unknown"

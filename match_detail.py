@@ -10,7 +10,8 @@ from collections import defaultdict
 # Bump when extract_detail's output schema changes so the worker re-fetches and
 # re-extracts stale cached records (matches are immutable but our parsing isn't).
 # v2 added: opening_deaths, won, teammates.
-SCHEMA_VERSION = 2
+# v3 tightened clutch definition to 1vX where X >= 2 (excludes 1v1s).
+SCHEMA_VERSION = 3
 
 
 def _puuid(side):
@@ -105,7 +106,8 @@ def extract_detail(data, puuid):
 
 def _count_clutches(players, rounds, by_round, puuid, my_team):
     """A clutch: at some point in a round my team has exactly 1 alive (me) while
-    the enemy has >=1 alive, and my team wins the round."""
+    the enemy has >=2 alive (a 1v2 or better), and my team wins the round.
+    1v1s are not counted."""
     team_of = {p.get("puuid"): p.get("team_id") for p in players}
     clutches = 0
     for idx, r in enumerate(rounds):
@@ -117,7 +119,7 @@ def _count_clutches(players, rounds, by_round, puuid, my_team):
             alive.discard(victim)
             my_alive = [p for p in alive if team_of.get(p) == my_team]
             enemy_alive = [p for p in alive if team_of.get(p) != my_team and team_of.get(p) is not None]
-            if len(my_alive) == 1 and puuid in my_alive and len(enemy_alive) >= 1:
+            if len(my_alive) == 1 and puuid in my_alive and len(enemy_alive) >= 2:
                 in_clutch = True
         if in_clutch and r.get("winning_team") == my_team:
             clutches += 1
