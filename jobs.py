@@ -27,6 +27,7 @@ def create_job():
             "oldest_ts": None, "progress_pct": 0.0, "eta_seconds": None,
             "paused_seconds_left": 0, "message": "Starting…",
             "puuid": None, "error": None, "cutoff_ts": None,
+            "total_matches": 0,
             "created_at": now_ts,
         }
     return job_id
@@ -36,7 +37,7 @@ def get_job(job_id):
     return JOBS.get(job_id)
 
 
-def run_job(job_id, name, tag, region, window_seconds, client=None, now=None):
+def run_job(job_id, name, tag, region, window_seconds, queue, client=None, now=None):
     job = JOBS[job_id]
     now = now or time.time()
     started_wall = time.time()
@@ -59,65 +60,97 @@ def run_job(job_id, name, tag, region, window_seconds, client=None, now=None):
         job["puuid"] = puuid
         region = region or account.get("region") or region
 
-        existing = cache.load_matches(puuid)
-        cached_newest = cache.newest_timestamp(existing)
-        collected = list(existing)
+        # ------------------------------------------------------------------
+        # PHASE 1 — scan history: collect all in-window match IDs
+        # ------------------------------------------------------------------
+        job["message"] = "Scanning history…"
+        in_window_ids = []
+        page_size = config.PAGE_SIZE
+        start_index = 0
 
-        page = 1
-        reached_cutoff = False
         while True:
-            job["message"] = f"Fetching page {page}…"
-            batch = client.get_matches_page(region, name, tag, page, config.PAGE_SIZE)
+            page = client.get_match_history(puuid, region, start_index,
+                                            start_index + page_size, queue)
             job["status"] = "running"
             job["paused_seconds_left"] = 0
-            if not batch:
+
+            stop_scan = False
+            for entry in page:
+                if entry["timestamp"] < cutoff:
+                    stop_scan = True
+                    break
+                in_window_ids.append(entry["match_id"])
+
+            if stop_scan or len(page) < page_size:
                 break
 
-            new_for_page = []
-            for m in batch:
-                if cached_newest is not None and m["timestamp"] <= cached_newest:
-                    continue
-                new_for_page.append(m)
-                if m["timestamp"] < cutoff:
-                    reached_cutoff = True
+            start_index += page_size
 
-            collected = cache.merge_matches(collected, new_for_page)
+        job["total_matches"] = len(in_window_ids)
 
-            # Compute in-window subset for progress/reporting
-            in_window = [m for m in collected if m["timestamp"] >= cutoff]
+        # ------------------------------------------------------------------
+        # PHASE 2 — fetch details: fetch only uncached in-window matches
+        # ------------------------------------------------------------------
+        existing = cache.load_matches(puuid)
+        cached_ids = {m["id"] for m in existing}
+        collected = list(existing)
 
-            job["pages_fetched"] = page
-            job["matches_parsed"] = len(in_window)
-            oldest = min((m["timestamp"] for m in in_window), default=now)
+        total = len(in_window_ids)
+        for i, match_id in enumerate(in_window_ids):
+            if match_id in cached_ids:
+                continue
+
+            raw = client.get_match_details(match_id, region)
+            job["status"] = "running"
+            job["paused_seconds_left"] = 0
+            if raw is None:
+                continue
+
+            m = henrik.normalize_raw_match(raw, puuid)
+            if m is None:
+                continue
+
+            collected.append(m)
+
+            # Update progress after each successful detail
+            in_window = [x for x in collected if x["timestamp"] >= cutoff]
+            matches_parsed = len(in_window)
+            job["matches_parsed"] = matches_parsed
+            job["progress_pct"] = round(min(matches_parsed / total, 1.0) * 100, 1) if total > 0 else 0.0
+            oldest = min((x["timestamp"] for x in in_window), default=now)
             job["oldest_ts"] = oldest
-            covered = max(now - oldest, 0)
-            pct = min(covered / window_seconds, 1.0) * 100
-            job["progress_pct"] = round(pct, 1)
             elapsed = time.time() - started_wall
-            if pct > 0:
-                job["eta_seconds"] = int(elapsed * (100 - pct) / pct)
+            rate = matches_parsed / elapsed if elapsed > 0 else 0
+            remaining = total - matches_parsed
+            job["eta_seconds"] = int(remaining / rate) if rate > 0 else None
+            job["message"] = f"Fetching match {matches_parsed}/{total}…"
 
+            # Persist after every match
             cache.save_matches(puuid, collected)
 
-            if reached_cutoff:
-                break
-            page += 1
+        # Final persist (covers cached-only runs where loop body never executed)
+        cache.save_matches(puuid, collected)
 
-        in_window = [m for m in collected if m["timestamp"] >= cutoff]
-        job["matches_parsed"] = len(in_window)
+        # Final progress values
+        in_window = [x for x in collected if x["timestamp"] >= cutoff]
+        matches_parsed = len(in_window)
+        job["matches_parsed"] = matches_parsed
+        job["progress_pct"] = 100.0 if total > 0 else 0.0
+        job["oldest_ts"] = min((x["timestamp"] for x in in_window), default=now)
         job["eta_seconds"] = 0
         job["status"] = "done"
-        job["message"] = f"Done — {len(in_window)} matches"
+        job["message"] = f"Done — {matches_parsed} matches"
+
     except Exception as e:  # noqa: BLE001 - surface any failure to the UI
         job["status"] = "error"
         job["error"] = str(e)
         job["message"] = f"Error: {e}"
 
 
-def start_job(name, tag, region, window_seconds):
+def start_job(name, tag, region, window_seconds, queue):
     job_id = create_job()
     t = threading.Thread(target=run_job,
-                         args=(job_id, name, tag, region, window_seconds),
+                         args=(job_id, name, tag, region, window_seconds, queue),
                          daemon=True)
     t.start()
     return job_id

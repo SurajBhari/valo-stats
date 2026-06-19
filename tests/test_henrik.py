@@ -344,25 +344,6 @@ def test_post_triggers_rate_limit_pause(monkeypatch):
     assert paused == [5]
 
 
-# ---------------------------------------------------------------------------
-# Backward-compat: old normalize_match still works (jobs.py uses it via DR1 keep)
-# ---------------------------------------------------------------------------
-
-def test_normalize_match_still_works():
-    """Old normalize_match must remain importable and correct — jobs.py depends on it."""
-    raw = {
-        "meta": {"id": "m1", "started_at": "2024-01-01T00:00:00.000Z",
-                 "map": {"name": "Ascent"}, "mode": "Competitive"},
-        "stats": {"team": "Red", "character": {"name": "Jett"},
-                  "score": 4800, "kills": 20, "deaths": 10, "assists": 5,
-                  "shots": {"head": 20, "body": 70, "leg": 10},
-                  "damage": {"made": 4000, "received": 3000}},
-        "teams": {"red": 13, "blue": 11},
-    }
-    m = henrik.normalize_match(raw)
-    assert m["id"] == "m1"
-    assert m["won"] is True
-
 
 def test_get_account_url_encodes_slash(monkeypatch):
     """A name containing '/' must be percent-encoded to prevent path injection."""
