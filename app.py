@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import time
 
@@ -24,9 +25,13 @@ def start():
     name = (body.get("name") or "").strip()
     tag = (body.get("tag") or "").strip()
     region = (body.get("region") or "na").strip().lower()
+    window_key = (body.get("window") or "").strip()
+    if window_key not in config.WINDOWS:
+        window_key = config.DEFAULT_WINDOW
+    window_seconds = config.WINDOWS[window_key]
     if not name or not tag:
         return jsonify({"error": "name and tag required"}), 400
-    job_id = jobs.start_job(name, tag, region)
+    job_id = jobs.start_job(name, tag, region, window_seconds)
     return jsonify({"job_id": job_id})
 
 
@@ -51,6 +56,9 @@ def pdf(job_id):
     if job is None or job["status"] != "done":
         return jsonify({"error": "job not ready"}), 400
     matches = cache.load_matches(job["puuid"])
+    cutoff_ts = job.get("cutoff_ts")
+    if cutoff_ts is not None:
+        matches = [m for m in matches if m["timestamp"] >= cutoff_ts]
     agg = stats.aggregate(matches)
     player = {"name": request.args.get("name", ""),
               "tag": request.args.get("tag", ""),
@@ -66,4 +74,5 @@ def pdf(job_id):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, threaded=True, port=5000)
+    app.run(debug=False, threaded=True, host="0.0.0.0",
+            port=int(os.environ.get("PORT", "5000")))

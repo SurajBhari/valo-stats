@@ -9,15 +9,25 @@ import henrik
 JOBS = {}
 _LOCK = threading.Lock()
 
+JOB_TTL_SECONDS = 1800
+
 
 def create_job():
     job_id = uuid.uuid4().hex
+    now_ts = time.time()
     with _LOCK:
+        # Evict completed/errored jobs older than TTL
+        expired = [jid for jid, j in JOBS.items()
+                   if j["status"] in ("done", "error")
+                   and now_ts - j["created_at"] > JOB_TTL_SECONDS]
+        for jid in expired:
+            del JOBS[jid]
         JOBS[job_id] = {
             "status": "running", "matches_parsed": 0, "pages_fetched": 0,
             "oldest_ts": None, "progress_pct": 0.0, "eta_seconds": None,
             "paused_seconds_left": 0, "message": "Starting…",
-            "puuid": None, "error": None,
+            "puuid": None, "error": None, "cutoff_ts": None,
+            "created_at": now_ts,
         }
     return job_id
 
@@ -26,11 +36,12 @@ def get_job(job_id):
     return JOBS.get(job_id)
 
 
-def run_job(job_id, name, tag, region, client=None, now=None):
+def run_job(job_id, name, tag, region, window_seconds, client=None, now=None):
     job = JOBS[job_id]
     now = now or time.time()
     started_wall = time.time()
-    cutoff = now - config.TWO_YEARS_SECONDS
+    cutoff = now - window_seconds
+    job["cutoff_ts"] = cutoff
 
     def on_pause(seconds):
         job["status"] = "paused"
@@ -72,12 +83,15 @@ def run_job(job_id, name, tag, region, client=None, now=None):
 
             collected = cache.merge_matches(collected, new_for_page)
 
+            # Compute in-window subset for progress/reporting
+            in_window = [m for m in collected if m["timestamp"] >= cutoff]
+
             job["pages_fetched"] = page
-            job["matches_parsed"] = len(collected)
-            oldest = min((m["timestamp"] for m in collected), default=now)
+            job["matches_parsed"] = len(in_window)
+            oldest = min((m["timestamp"] for m in in_window), default=now)
             job["oldest_ts"] = oldest
             covered = max(now - oldest, 0)
-            pct = min(covered / config.TWO_YEARS_SECONDS, 1.0) * 100
+            pct = min(covered / window_seconds, 1.0) * 100
             job["progress_pct"] = round(pct, 1)
             elapsed = time.time() - started_wall
             if pct > 0:
@@ -89,18 +103,21 @@ def run_job(job_id, name, tag, region, client=None, now=None):
                 break
             page += 1
 
-        job["matches_parsed"] = len(collected)
+        in_window = [m for m in collected if m["timestamp"] >= cutoff]
+        job["matches_parsed"] = len(in_window)
         job["eta_seconds"] = 0
         job["status"] = "done"
-        job["message"] = f"Done — {len(collected)} matches"
+        job["message"] = f"Done — {len(in_window)} matches"
     except Exception as e:  # noqa: BLE001 - surface any failure to the UI
         job["status"] = "error"
         job["error"] = str(e)
         job["message"] = f"Error: {e}"
 
 
-def start_job(name, tag, region):
+def start_job(name, tag, region, window_seconds):
     job_id = create_job()
-    t = threading.Thread(target=run_job, args=(job_id, name, tag, region), daemon=True)
+    t = threading.Thread(target=run_job,
+                         args=(job_id, name, tag, region, window_seconds),
+                         daemon=True)
     t.start()
     return job_id

@@ -11,6 +11,7 @@ const form       = document.getElementById("report-form");
 const inputName  = document.getElementById("input-name");
 const inputTag   = document.getElementById("input-tag");
 const inputRegion= document.getElementById("input-region");
+const inputWindow= document.getElementById("input-window");
 const btnSubmit  = document.getElementById("btn-submit");
 const errNameTag = document.getElementById("error-name-tag");
 const errApi     = document.getElementById("error-api");
@@ -49,7 +50,7 @@ const btnReset     = document.getElementById("btn-reset");
 
 /* ── State ───────────────────────────────────────────────── */
 let currentEs  = null;   // active EventSource
-let currentJob = null;   // { name, tag, region, job_id }
+let currentJob = null;   // { name, tag, region, window, job_id }
 
 /* ── Utilities ───────────────────────────────────────────── */
 function fmtEta(seconds) {
@@ -222,7 +223,7 @@ function handleEvent(data) {
 }
 
 /* ── Start job + open SSE stream ─────────────────────────── */
-async function startReport(name, tag, region) {
+async function startReport(name, tag, region, window) {
   btnSubmit.disabled = true;
   btnSubmit.textContent = "Starting...";
   errApi.style.display = "none";
@@ -232,7 +233,7 @@ async function startReport(name, tag, region) {
     const res = await fetch("/api/report/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, tag, region }),
+      body: JSON.stringify({ name, tag, region, window }),
     });
     const json = await res.json();
     if (!res.ok) {
@@ -253,7 +254,7 @@ async function startReport(name, tag, region) {
   }
 
   /* Job started — show the panel */
-  currentJob = { name, tag, region, job_id: jobId };
+  currentJob = { name, tag, region, window, job_id: jobId };
   footerJobId.textContent = `job ${jobId.slice(0, 8)}`;
 
   // Set player name immediately — use DOM methods, no innerHTML
@@ -316,6 +317,7 @@ form.addEventListener("submit", function(e) {
   const rawTag = inputTag.value.trim();
   const tag    = sanitizeTag(rawTag);
   const region = inputRegion.value;
+  const window = inputWindow.value;
 
   if (!name || !tag) {
     errNameTag.classList.add("visible");
@@ -330,7 +332,7 @@ form.addEventListener("submit", function(e) {
     currentEs = null;
   }
 
-  startReport(name, tag, region);
+  startReport(name, tag, region, window);
 });
 
 /* ── Reset button ────────────────────────────────────────── */

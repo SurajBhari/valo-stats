@@ -10,3 +10,6 @@ PAGE_SIZE = 20
 RATE_LIMIT_THRESHOLD = 2
 CACHE_DIR = os.path.join(os.path.dirname(__file__), "cache")
 REGIONS = ["na", "eu", "ap", "kr", "latam", "br"]
+
+WINDOWS = {"1d": 86400, "1w": 604800, "1m": 2592000, "1y": 31536000}
+DEFAULT_WINDOW = "1m"
