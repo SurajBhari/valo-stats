@@ -113,10 +113,14 @@
   </div>
   {% endif %}
 
-  <h2>When you play</h2>
+  <h2>When you play <span id="tz-cap" class="muted" style="text-transform:none;letter-spacing:0;"></span></h2>
+  <div class="card" style="margin-bottom:16px;">
+    <h3 id="heat-cap">Activity heatmap — weekday × hour</h3>
+    <div class="chartbox" style="height:230px;"><canvas id="c-heat"></canvas></div>
+  </div>
   <div class="grid">
-    <div class="card"><h3 id="hours-cap">Matches by hour</h3><div class="chartbox"><canvas id="c-hours"></canvas></div></div>
     <div class="card"><h3>Winrate by weekday</h3><div class="chartbox"><canvas id="c-weekday"></canvas></div></div>
+    <div class="card"><h3>Performance profile (0–100)</h3><div class="chartbox"><canvas id="c-radar"></canvas></div></div>
   </div>
 
   <div class="grid" style="margin-top:16px;">
@@ -151,6 +155,9 @@
 <script id="report-data" type="application/json">{{ data|tojson }}</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
         integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4"
+        crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@2.0.1/dist/chartjs-chart-matrix.min.js"
+        integrity="sha384-a7esWkFf+Il6h/+W+5aJjvkI7IVLbCVGkyH9OiFy3Jf0Rdn2cEyIymqq/hBdXsvj"
         crossorigin="anonymous"></script>
 <script src="/static/dashboard.js"></script>
 </body>

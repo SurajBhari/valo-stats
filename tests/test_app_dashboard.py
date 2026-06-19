@@ -41,8 +41,11 @@ def test_dashboard_route_renders(tmp_path, monkeypatch):
     html = resp.get_data(as_text=True)
     assert "report-data" in html              # embedded JSON blob
     assert "chart.umd.min.js" in html         # Chart.js loaded
+    assert "chartjs-chart-matrix" in html     # matrix plugin loaded
     assert 'id="c-trends"' in html            # canvases present
-    assert 'integrity="sha384-' in html       # SRI pinned
+    assert 'id="c-heat"' in html              # activity heatmap canvas
+    assert 'id="c-radar"' in html             # performance radar canvas
+    assert html.count('integrity="sha384-') >= 2  # both CDN scripts SRI-pinned
     assert "Export PDF" in html
 
 

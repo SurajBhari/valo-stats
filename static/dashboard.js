@@ -151,36 +151,88 @@ const LOCAL_ACT = (function () {
 })();
 
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || "local time";
+(function () { const c = document.getElementById("tz-cap"); if (c) c.textContent = `· ${TZ}`; })();
 
-/* ── Activity by hour (local) ────────────────────────────────── */
+/* ── Activity heatmap: weekday × hour (chartjs-chart-matrix) ──── */
 (function () {
-  const h = LOCAL_ACT.hours;
-  // fall back to server UTC buckets if no raw samples were sent
-  const useServer = !(DATA.match_samples && DATA.match_samples.length);
-  const src = useServer ? ((DATA.activity && DATA.activity.by_hour) || []) : h;
-  if (!src.length) return;
-  const games = src.map(x => x.games);
-  const wins = src.map(x => x.wins != null ? x.wins : 0);
-  mk("c-hours", {
-    type: "bar",
-    data: {
-      labels: src.map((_, i) => String(i).padStart(2, "0")),
-      datasets: [{ label: "Matches", data: games,
-                   backgroundColor: RED_SOFT, borderColor: RED, borderWidth: 1 }],
-    },
+  const samples = DATA.match_samples || [];
+  const cap = document.getElementById("heat-cap");
+  if (!samples.length) {  // no raw samples → can't build a local-tz heatmap
+    if (cap) cap.textContent = "Activity heatmap (needs a fresh report)";
+    return;
+  }
+  const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const jsToIdx = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 0: 6 };
+  const grid = {}; let maxV = 0;
+  for (const s of samples) {
+    const d = new Date(s[0] * 1000);
+    const k = jsToIdx[d.getDay()] + "|" + d.getHours();
+    const c = grid[k] || (grid[k] = { g: 0, w: 0 });
+    c.g++; if (s[1] === 1) c.w++;
+    if (c.g > maxV) maxV = c.g;
+  }
+  const cells = [];
+  for (let di = 0; di < 7; di++) for (let h = 0; h < 24; h++) {
+    const c = grid[di + "|" + h] || { g: 0, w: 0 };
+    cells.push({ x: h, y: DAYS[di], v: c.g, wr: _winrate(c.w, c.g) });
+  }
+  if (cap) cap.textContent = `Activity heatmap — weekday × hour (${TZ})`;
+
+  mk("c-heat", {
+    type: "matrix",
+    data: { datasets: [{
+      label: "Matches",
+      data: cells,
+      backgroundColor: (c) => {
+        const v = c.raw ? c.raw.v : 0;
+        if (!v || !maxV) return "rgba(255,255,255,0.03)";
+        return `rgba(255,70,85,${(0.15 + 0.85 * v / maxV).toFixed(3)})`;
+      },
+      borderColor: "#15171c", borderWidth: 1,
+      width: (c) => { const a = c.chart.chartArea || {}; return ((a.right - a.left) || 0) / 24 - 2; },
+      height: (c) => { const a = c.chart.chartArea || {}; return ((a.bottom - a.top) || 0) / 7 - 2; },
+    }] },
     options: {
-      scales: { x: gridScale(), y: gridScale({ beginAtZero: true, precision: 0 }) },
+      scales: {
+        x: { type: "linear", position: "top", min: -0.5, max: 23.5, offset: false,
+             ticks: { stepSize: 3, callback: (v) => String(v).padStart(2, "0") },
+             grid: { display: false } },
+        y: { type: "category", labels: ["Sun", "Sat", "Fri", "Thu", "Wed", "Tue", "Mon"],
+             offset: true, grid: { display: false } },
+      },
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: (ctx) => {
-          const g = games[ctx.dataIndex];
-          return `${g} matches · ${_winrate(wins[ctx.dataIndex], g)}% WR`;
-        } } },
+        tooltip: { callbacks: {
+          title: () => "",
+          label: (c) => {
+            const r = c.raw;
+            return `${r.y} ${String(r.x).padStart(2, "0")}:00 — ${r.v} games · ${r.wr}% WR`;
+          },
+        } },
       },
     },
   });
-  const cap = document.getElementById("hours-cap");
-  if (cap) cap.textContent = useServer ? "Matches by hour (UTC)" : `Matches by hour (${TZ})`;
+})();
+
+/* ── Performance profile (radar) ─────────────────────────────── */
+(function () {
+  const o = DATA.overview || {};
+  const d = DATA.detail;
+  const labels = ["Winrate", "HS%", "KDA", "ADR"];
+  const vals = [o.winrate || 0, o.hs_pct || 0,
+                Math.min((o.kda || 0) / 3 * 100, 100),
+                Math.min((o.adr || 0) / 2, 100)];
+  if (d && d.combat) { labels.push("Opening"); vals.push(d.combat.opening_winrate || 0); }
+  mk("c-radar", {
+    type: "radar",
+    data: { labels, datasets: [{ label: "Profile", data: vals,
+            backgroundColor: RED_SOFT, borderColor: RED, pointBackgroundColor: RED }] },
+    options: {
+      scales: { r: { min: 0, max: 100, grid: { color: GRID }, angleLines: { color: GRID },
+                     pointLabels: { color: "#cfd3df" }, ticks: { display: false, backdropColor: "transparent" } } },
+      plugins: { legend: { display: false } },
+    },
+  });
 })();
 
 /* ── Winrate by weekday (local) ──────────────────────────────── */
