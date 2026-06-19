@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: valo-stats
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      # Your HenrikDev (Valorant) API key. Set this in the Render dashboard —
+      # it is intentionally not stored in this file.
+      - key: HENRIK_API_KEY
+        sync: false
+      - key: PYTHONUNBUFFERED
+        value: "1"
