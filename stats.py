@@ -6,6 +6,94 @@ def _safe_div(n, d):
     return n / d if d else 0.0
 
 
+def _streaks(sorted_matches):
+    """Compute streak stats from matches already sorted ascending by timestamp."""
+    if not sorted_matches:
+        return {"longest_win": 0, "longest_loss": 0, "current": {"type": "", "length": 0}}
+
+    longest_win = longest_loss = 0
+    run = 1
+    for i in range(1, len(sorted_matches)):
+        prev, cur = sorted_matches[i - 1]["won"], sorted_matches[i]["won"]
+        if cur == prev:
+            run += 1
+        else:
+            run = 1
+        if cur is True and run > longest_win:
+            longest_win = run
+        elif cur is False and run > longest_loss:
+            longest_loss = run
+    # seed with the first element
+    first_won = sorted_matches[0]["won"]
+    if first_won is True:
+        longest_win = max(longest_win, 1)
+    elif first_won is False:
+        longest_loss = max(longest_loss, 1)
+
+    # current streak from newest backward
+    newest_won = sorted_matches[-1]["won"]
+    cur_type = "W" if newest_won is True else ("L" if newest_won is False else "D")
+    cur_len = 0
+    for m in reversed(sorted_matches):
+        if m["won"] == newest_won:
+            cur_len += 1
+        else:
+            break
+
+    return {"longest_win": longest_win, "longest_loss": longest_loss,
+            "current": {"type": cur_type, "length": cur_len}}
+
+
+def _days(sorted_matches):
+    """Return best_day/worst_day dicts grouped by UTC calendar date."""
+    if not sorted_matches:
+        return {"best_day": None, "worst_day": None}
+
+    by_date = defaultdict(list)
+    for m in sorted_matches:
+        date = datetime.fromtimestamp(m["timestamp"], timezone.utc).strftime("%Y-%m-%d")
+        by_date[date].append(m)
+
+    day_stats = []
+    for date, ms in by_date.items():
+        games = len(ms)
+        wins = sum(1 for x in ms if x["won"] is True)
+        losses = sum(1 for x in ms if x["won"] is False)
+        day_stats.append({"date": date, "games": games, "wins": wins, "losses": losses})
+
+    best = max(day_stats, key=lambda d: (d["wins"], _safe_div(d["wins"], d["games"]), d["games"]))
+    worst = max(day_stats, key=lambda d: (d["losses"], -_safe_div(d["wins"], d["games"]), d["games"]))
+    return {"best_day": best, "worst_day": worst}
+
+
+def _combos(matches):
+    """Group by (agent, map), return list sorted by games desc."""
+    if not matches:
+        return []
+
+    groups = defaultdict(list)
+    for m in matches:
+        groups[(m["agent"], m["map"])].append(m)
+
+    out = []
+    for (agent, map_), ms in groups.items():
+        games = len(ms)
+        wins = sum(1 for x in ms if x["won"] is True)
+        k = sum(x["kills"] for x in ms)
+        d = sum(x["deaths"] for x in ms)
+        a = sum(x["assists"] for x in ms)
+        rounds = sum(x["rounds"] for x in ms)
+        score = sum(x["score"] for x in ms)
+        out.append({
+            "agent": agent, "map": map_, "games": games, "wins": wins,
+            "winrate": _winrate(wins, games),
+            "kda": _kda(k, a, d),
+            "acs": round(_safe_div(score, rounds), 1),
+        })
+    out.sort(key=lambda x: x["games"], reverse=True)
+    return out
+
+
 def _kda(k, a, d):
     return round((k + a) / (d if d else 1), 2)
 
@@ -48,8 +136,15 @@ def aggregate(matches):
                              "acs": 0.0, "adr": 0.0, "date_from": None, "date_to": None},
                 "per_agent": [], "per_map": [], "per_mode": [],
                 "weapons": {"head": 0, "body": 0, "leg": 0,
-                            "damage_made": 0, "damage_received": 0},
-                "best": {}, "worst": {}, "trends": [], "meta": {}}
+                            "damage_made": 0, "damage_received": 0,
+                            "head_pct": 0.0, "body_pct": 0.0, "leg_pct": 0.0},
+                "best": {}, "worst": {}, "trends": [], "meta": {},
+                "streaks": {"longest_win": 0, "longest_loss": 0,
+                            "current": {"type": "", "length": 0}},
+                "days": {"best_day": None, "worst_day": None},
+                "combos": []}
+
+    sorted_matches = sorted(matches, key=lambda m: m["timestamp"])
 
     total = len(matches)
     wins = sum(1 for m in matches if m["won"] is True)
@@ -110,8 +205,16 @@ def aggregate(matches):
         "per_agent": _group(matches, "agent"),
         "per_map": _group(matches, "map"),
         "per_mode": _group(matches, "mode"),
-        "weapons": {"head": head, "body": body, "leg": leg,
-                    "damage_made": dmg_made, "damage_received": dmg_recv},
+        "weapons": {
+            "head": head, "body": body, "leg": leg,
+            "damage_made": dmg_made, "damage_received": dmg_recv,
+            "head_pct": round(_safe_div(head, shots) * 100, 1),
+            "body_pct": round(_safe_div(body, shots) * 100, 1),
+            "leg_pct": round(_safe_div(leg, shots) * 100, 1),
+        },
         "best": best, "worst": worst, "trends": trends,
         "meta": {},
+        "streaks": _streaks(sorted_matches),
+        "days": _days(sorted_matches),
+        "combos": _combos(matches),
     }
