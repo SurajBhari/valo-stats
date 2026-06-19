@@ -301,6 +301,29 @@ def test_get_match_details_returns_none_on_500(monkeypatch):
     assert result is None
 
 
+def test_get_match_details_429_retries_and_returns_data(monkeypatch):
+    """429 on first call → pause + retry → 200 on second call → return data."""
+    slept = []
+    paused = []
+    c = henrik.HenrikClient(api_key="k", on_pause=lambda s: paused.append(s))
+    monkeypatch.setattr(henrik.time, "sleep", lambda s: slept.append(s))
+
+    call_count = [0]
+
+    def fake_post(body):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            return _Resp(429, {}, {"x-ratelimit-reset": "4"})
+        return _Resp(200, _DETAILS_RESP, {"x-ratelimit-remaining": "50"})
+
+    monkeypatch.setattr(c, "_post", fake_post)
+    result = c.get_match_details("mid-1", "na")
+    assert slept == [4]
+    assert paused == [4]
+    assert result is not None
+    assert result["matchInfo"]["matchId"] == "mid-1"
+
+
 # ---------------------------------------------------------------------------
 # _post rate-limit pause
 # ---------------------------------------------------------------------------

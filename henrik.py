@@ -5,6 +5,7 @@ from urllib.parse import quote
 import requests
 
 import config
+import valorant_content as vc
 
 
 def _parse_ts(started_at):
@@ -57,8 +58,6 @@ def normalize_raw_match(raw, puuid):
 
     Returns None if puuid is not found in the match's player list.
     """
-    import valorant_content as vc
-
     info = raw.get("matchInfo") or {}
     players = raw.get("players") or []
     teams = raw.get("teams") or []
@@ -202,6 +201,7 @@ class HenrikClient:
         """Fetch raw Riot match details via POST /valorant/v1/raw (matchdetails type).
 
         Returns the raw match dict (data field) on 200, or None on non-200.
+        Retries on 429 up to 5 times.
         """
         body = {
             "type": "matchdetails",
@@ -209,10 +209,18 @@ class HenrikClient:
             "region": region,
             "queries": "",
         }
-        resp = self._post(body)
-        if resp.status_code != 200:
-            return None
-        return resp.json()["data"]
+        for attempt in range(5):
+            resp = self._post(body)
+            if resp.status_code == 429:
+                wait = int(resp.headers.get("x-ratelimit-reset", "60"))
+                if self.on_pause:
+                    self.on_pause(wait)
+                time.sleep(wait)
+                continue
+            if resp.status_code != 200:
+                return None
+            return resp.json()["data"]
+        return None
 
     # ------------------------------------------------------------------
     # Old method — kept for backward compatibility with jobs.py (DR2 removes it)
