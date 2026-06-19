@@ -46,6 +46,7 @@ const errorMsg     = document.getElementById("error-msg");
 const downloadSection = document.getElementById("download-section");
 const downloadSub     = document.getElementById("download-sub");
 const btnDownload     = document.getElementById("btn-download");
+const btnDashboard    = document.getElementById("btn-dashboard");
 
 const btnReset     = document.getElementById("btn-reset");
 
@@ -76,9 +77,9 @@ function sanitizeTag(raw) {
   return raw.replace(/^#/, "").trim();
 }
 
-function buildPdfUrl(jobId, name, tag, region) {
+function buildReportUrl(jobId, kind, name, tag, region) {
   const params = new URLSearchParams({ name, tag, region });
-  return `/api/report/${encodeURIComponent(jobId)}/pdf?${params.toString()}`;
+  return `/api/report/${encodeURIComponent(jobId)}/${kind}?${params.toString()}`;
 }
 
 /* ── Show / hide helpers ─────────────────────────────────── */
@@ -213,10 +214,10 @@ function handleEvent(data) {
   if (status === "done") {
     if (currentEs) { currentEs.close(); currentEs = null; }
     const { name, tag, region, job_id } = currentJob;
-    const url = buildPdfUrl(job_id, name, tag, region);
-    btnDownload.href = url;
+    btnDashboard.href = buildReportUrl(job_id, "dashboard", name, tag, region);
+    btnDownload.href = buildReportUrl(job_id, "pdf", name, tag, region);
     downloadSub.textContent =
-      `${matches} matches parsed. Opens in a new tab (PDF or HTML fallback).`;
+      `${matches} matches parsed. Open the interactive dashboard, or export a PDF.`;
     downloadSection.classList.add("visible");
     btnReset.style.display = "";
     btnSubmit.disabled = false;
