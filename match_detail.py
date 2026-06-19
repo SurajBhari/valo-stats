@@ -12,7 +12,8 @@ from collections import defaultdict
 # v2 added: opening_deaths, won, teammates.
 # v3 tightened clutch definition to 1vX where X >= 2 (excludes 1v1s).
 # v4 added: KAST rounds, clutch_breakdown (1v1..1v5), attack/defense splits, game_length_ms.
-SCHEMA_VERSION = 4
+# v5 added: survival_rounds, flawless_rounds, trade_kills, traded_deaths.
+SCHEMA_VERSION = 5
 
 # A death counts as "traded" for KAST if the killer dies within this window.
 TRADE_WINDOW_MS = 3000
@@ -90,6 +91,14 @@ def extract_detail(data, puuid):
 
     game_length_ms = meta.get("game_length_in_ms", 0) or 0
 
+    # --- combat extras: survival / flawless / trades ---
+    if my_team:
+        team_of = {p.get("puuid"): p.get("team_id") for p in players}
+        survival_rounds, flawless_rounds, trade_kills, traded_deaths = _combat_extras(
+            rounds, by_round, team_of, puuid, my_team)
+    else:
+        survival_rounds = flawless_rounds = trade_kills = traded_deaths = 0
+
     # --- match result + teammates ---
     won = None
     for t in (data.get("teams") or []):
@@ -117,6 +126,10 @@ def extract_detail(data, puuid):
         "attack_won": aw, "attack_played": ap,
         "defense_won": dw, "defense_played": dp,
         "game_length_ms": game_length_ms,
+        "survival_rounds": survival_rounds,
+        "flawless_rounds": flawless_rounds,
+        "trade_kills": trade_kills,
+        "traded_deaths": traded_deaths,
         "ability_casts": ability_casts,
         "spent_avg": spent_avg,
         "loadout_avg": loadout_avg,
@@ -173,6 +186,43 @@ def _kast_rounds(rounds, by_round, puuid):
         if got_kill or got_assist or survived or traded:
             kast += 1
     return kast
+
+
+def _combat_extras(rounds, by_round, team_of, puuid, my_team):
+    """Return (survival_rounds, flawless_rounds, trade_kills, traded_deaths).
+
+    - survival: rounds the player was not killed.
+    - flawless: rounds the player's team won without a single teammate dying.
+    - trade_kills: my kills of an enemy who had killed a teammate within the window.
+    - traded_deaths: my deaths where my killer was killed within the window after.
+    """
+    survival = flawless = trade_kills = traded_deaths = 0
+    for idx, r in enumerate(rounds):
+        rid = r.get("id", idx)
+        ks = sorted(by_round.get(rid, by_round.get(idx, [])),
+                    key=lambda x: x.get("time_in_round_in_ms", 0))
+        victims = [_puuid(k.get("victim")) for k in ks]
+        if puuid not in victims:
+            survival += 1
+        if r.get("winning_team") == my_team and not any(team_of.get(v) == my_team for v in victims):
+            flawless += 1
+        for k in ks:
+            t = k.get("time_in_round_in_ms", 0)
+            killer, victim = _puuid(k.get("killer")), _puuid(k.get("victim"))
+            if killer == puuid:
+                for k2 in ks:
+                    if (_puuid(k2.get("killer")) == victim
+                            and team_of.get(_puuid(k2.get("victim"))) == my_team
+                            and 0 <= t - k2.get("time_in_round_in_ms", 0) <= TRADE_WINDOW_MS):
+                        trade_kills += 1
+                        break
+            if victim == puuid:
+                for k2 in ks:
+                    if (_puuid(k2.get("victim")) == killer
+                            and 0 <= k2.get("time_in_round_in_ms", 0) - t <= TRADE_WINDOW_MS):
+                        traded_deaths += 1
+                        break
+    return survival, flawless, trade_kills, traded_deaths
 
 
 def _other(team):

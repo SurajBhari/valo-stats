@@ -159,6 +159,40 @@ def test_game_length_captured():
     assert d["game_length_ms"] == 1234567
 
 
+def test_survival_rounds():
+    # ME is never a victim in either round of _payload → survived both
+    d = match_detail.extract_detail(_payload(), ME)
+    assert d["survival_rounds"] == 2
+
+
+def test_flawless_rounds():
+    # _side_payload: round0 Red wins with no kills (no teammate deaths) → flawless for R
+    d = match_detail.extract_detail(_side_payload(), "R")
+    assert d["flawless_rounds"] == 1
+
+
+def test_trade_kills_and_traded_deaths():
+    payload = {
+        "metadata": {"match_id": "t"},
+        "players": [
+            {"puuid": ME, "name": "Me", "team_id": "Red"},
+            {"puuid": MATE, "name": "Mate", "team_id": "Red"},
+            {"puuid": ENEMY1, "name": "E1", "team_id": "Blue"},
+            {"puuid": ENEMY2, "name": "E2", "team_id": "Blue"},
+        ],
+        "rounds": [{"id": 0, "winning_team": "Red", "plant": None, "defuse": None}],
+        "kills": [
+            _kill(0, 1000, ENEMY1, MATE, "Vandal"),   # enemy E1 kills my teammate
+            _kill(0, 2000, ME, ENEMY1, "Vandal"),      # I trade-kill E1 (within 3s) → trade_kill
+            _kill(0, 5000, ENEMY2, ME, "Phantom"),     # I die to E2
+            _kill(0, 6000, MATE, ENEMY2, "Sheriff"),   # teammate trades my death → traded_death
+        ],
+    }
+    d = match_detail.extract_detail(payload, ME)
+    assert d["trade_kills"] == 1
+    assert d["traded_deaths"] == 1
+
+
 def test_missing_player_safe():
     d = match_detail.extract_detail(_payload(), "NOT-IN-MATCH")
     assert d["agent"] == "Unknown"
