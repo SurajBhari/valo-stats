@@ -4,3 +4,5 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+pytest_output.txt
+sample_report.html
