@@ -1,6 +1,16 @@
+import contextlib
+import io
+import logging
 import os
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+# WeasyPrint complains loudly to its logger/stderr when its native (GTK/Pango)
+# libraries are missing — expected on Windows dev machines, where we fall back
+# to HTML. Silence that logger so the console isn't polluted; the real PDF path
+# still runs on the Render Docker image, which has the libraries.
+logging.getLogger("weasyprint").setLevel(logging.CRITICAL)
+logging.getLogger("fontTools").setLevel(logging.CRITICAL)
 
 _env = Environment(
     loader=FileSystemLoader(os.path.join(os.path.dirname(__file__), "templates")),
@@ -13,8 +23,14 @@ def render_html(stats, player):
 
 
 def render_pdf(stats, player):
+    """Render the report to PDF bytes, or return None if WeasyPrint's native
+    libraries are unavailable (caller then serves the HTML fallback)."""
     try:
-        from weasyprint import HTML
+        # WeasyPrint print()s a multi-line native-library banner to stdout when
+        # GTK/Pango are missing; capture both streams during the import.
+        with contextlib.redirect_stdout(io.StringIO()), \
+                contextlib.redirect_stderr(io.StringIO()):
+            from weasyprint import HTML
     except Exception:
         return None
     html = render_html(stats, player)
