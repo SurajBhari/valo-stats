@@ -45,6 +45,7 @@ def test_dashboard_route_renders(tmp_path, monkeypatch):
     assert 'id="c-trends"' in html            # canvases present
     assert 'id="c-heat"' in html              # activity heatmap canvas
     assert 'id="c-radar"' in html             # performance radar canvas
+    assert "Kills / round" in html            # advanced efficiency sub-stats
     assert html.count('integrity="sha384-') >= 2  # both CDN scripts SRI-pinned
     assert "Export PDF" in html
 

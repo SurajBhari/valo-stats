@@ -86,6 +86,13 @@
     <div class="kpi"><div class="v">{{ data.overview.adr }}</div><div class="l">ADR</div></div>
   </div>
 
+  <div class="kpis" style="grid-template-columns:repeat(4,1fr); margin-top:-8px;">
+    <div class="kpi"><div class="v">{{ data.overview.kpr }}</div><div class="l">Kills / round</div></div>
+    <div class="kpi"><div class="v">{{ data.overview.dpr }}</div><div class="l">Deaths / round</div></div>
+    <div class="kpi"><div class="v">{{ data.overview.apr }}</div><div class="l">Assists / round</div></div>
+    <div class="kpi"><div class="v">{{ data.overview.dd_delta }}</div><div class="l">Dmg Δ / round</div></div>
+  </div>
+
   <h2>Trends &amp; performance</h2>
   <div class="grid">
     <div class="card full"><h3>Winrate &amp; ACS over months</h3><div class="chartbox"><canvas id="c-trends"></canvas></div></div>
@@ -109,7 +116,16 @@
     <div class="tile"><div class="v">{{ data.detail.combat.multikills['3k'] }}/{{ data.detail.combat.multikills['4k'] }}</div><div class="l">3K / 4K</div></div>
     <div class="tile"><div class="v">{{ data.detail.combat.plants }}</div><div class="l">Plants</div></div>
     <div class="tile"><div class="v">{{ data.detail.combat.defuses }}</div><div class="l">Defuses</div></div>
+    <div class="tile"><div class="v">{{ data.detail.kast }}%</div><div class="l">KAST</div></div>
+    <div class="tile"><div class="v">{{ data.detail.sides.attack.winrate }}%</div><div class="l">Attack WR</div></div>
+    <div class="tile"><div class="v">{{ data.detail.sides.defense.winrate }}%</div><div class="l">Defense WR</div></div>
+    <div class="tile"><div class="v">{{ data.detail.playtime.total_hours }}h</div><div class="l">Playtime</div></div>
+    <div class="tile"><div class="v">{{ data.detail.playtime.avg_minutes }}m</div><div class="l">Avg match</div></div>
     <div class="tile"><div class="v">{{ data.detail.economy.spent_avg|round|int }}</div><div class="l">Avg spend</div></div>
+  </div>
+  <div class="grid" style="margin-top:16px;">
+    <div class="card"><h3>Clutches won by type</h3><div class="chartbox"><canvas id="c-clutch"></canvas></div></div>
+    <div class="card"><h3>Attack vs Defense win-rate</h3><div class="chartbox"><canvas id="c-sides"></canvas></div></div>
   </div>
   {% endif %}
 

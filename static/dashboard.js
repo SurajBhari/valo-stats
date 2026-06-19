@@ -214,6 +214,47 @@ const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || "local time";
   });
 })();
 
+/* ── Clutches by type (1v1..1v5) ─────────────────────────────── */
+(function () {
+  const d = DATA.detail;
+  if (!d || !d.clutch_breakdown) return;
+  const order = ["1v1", "1v2", "1v3", "1v4", "1v5"];
+  mk("c-clutch", {
+    type: "bar",
+    data: {
+      labels: order,
+      datasets: [{ label: "Clutches won", data: order.map(k => d.clutch_breakdown[k] || 0),
+                   backgroundColor: RED_SOFT, borderColor: RED, borderWidth: 1 }],
+    },
+    options: { scales: { x: gridScale(), y: gridScale({ beginAtZero: true, precision: 0 }) },
+               plugins: { legend: { display: false } } },
+  });
+})();
+
+/* ── Attack vs Defense win-rate ──────────────────────────────── */
+(function () {
+  const d = DATA.detail;
+  if (!d || !d.sides) return;
+  const a = d.sides.attack, f = d.sides.defense;
+  mk("c-sides", {
+    type: "bar",
+    data: {
+      labels: ["Attack", "Defense"],
+      datasets: [{ label: "Win %", data: [a.winrate, f.winrate],
+                   backgroundColor: ["rgba(255,70,85,0.55)", "rgba(74,168,255,0.55)"],
+                   borderColor: [RED, BLUE], borderWidth: 1,
+                   played: [a.played, f.played] }],
+    },
+    options: {
+      scales: { x: gridScale(), y: gridScale({ min: 0, max: 100 }) },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.parsed.y}% over ${ctx.dataset.played[ctx.dataIndex]} rounds` } },
+      },
+    },
+  });
+})();
+
 /* ── Performance profile (radar) ─────────────────────────────── */
 (function () {
   const o = DATA.overview || {};
@@ -223,6 +264,7 @@ const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || "local time";
                 Math.min((o.kda || 0) / 3 * 100, 100),
                 Math.min((o.adr || 0) / 2, 100)];
   if (d && d.combat) { labels.push("Opening"); vals.push(d.combat.opening_winrate || 0); }
+  if (d && d.kast != null) { labels.push("KAST"); vals.push(d.kast || 0); }
   mk("c-radar", {
     type: "radar",
     data: { labels, datasets: [{ label: "Profile", data: vals,
