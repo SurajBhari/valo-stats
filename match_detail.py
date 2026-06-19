@@ -11,7 +11,11 @@ from collections import defaultdict
 # re-extracts stale cached records (matches are immutable but our parsing isn't).
 # v2 added: opening_deaths, won, teammates.
 # v3 tightened clutch definition to 1vX where X >= 2 (excludes 1v1s).
-SCHEMA_VERSION = 3
+# v4 added: KAST rounds, clutch_breakdown (1v1..1v5), attack/defense splits, game_length_ms.
+SCHEMA_VERSION = 4
+
+# A death counts as "traded" for KAST if the killer dies within this window.
+TRADE_WINDOW_MS = 3000
 
 
 def _puuid(side):
@@ -73,7 +77,18 @@ def extract_detail(data, puuid):
     defuses = sum(1 for r in rounds if _puuid((r.get("defuse") or {}).get("player")) == puuid)
 
     # --- clutches (best-effort, alive-state reconstruction) ---
-    clutches = _count_clutches(players, rounds, by_round, puuid, my_team) if my_team else 0
+    clutch_breakdown = (_clutch_breakdown(players, rounds, by_round, puuid, my_team)
+                        if my_team else {f"1v{i}": 0 for i in range(1, 6)})
+    clutches = sum(v for k, v in clutch_breakdown.items() if k != "1v1")  # 1v2+
+
+    # --- KAST (kill / assist / survive / trade per round) ---
+    kast_rounds = _kast_rounds(rounds, by_round, puuid) if rounds else 0
+    rounds_played = len(rounds)
+
+    # --- attack / defense round splits ---
+    aw, ap, dw, dp = _side_splits(rounds, puuid, my_team) if my_team else (0, 0, 0, 0)
+
+    game_length_ms = meta.get("game_length_in_ms", 0) or 0
 
     # --- match result + teammates ---
     won = None
@@ -96,6 +111,12 @@ def extract_detail(data, puuid):
         "plants": plants,
         "defuses": defuses,
         "clutches": clutches,
+        "clutch_breakdown": clutch_breakdown,
+        "kast_rounds": kast_rounds,
+        "rounds_played": rounds_played,
+        "attack_won": aw, "attack_played": ap,
+        "defense_won": dw, "defense_played": dp,
+        "game_length_ms": game_length_ms,
         "ability_casts": ability_casts,
         "spent_avg": spent_avg,
         "loadout_avg": loadout_avg,
@@ -104,23 +125,101 @@ def extract_detail(data, puuid):
     }
 
 
-def _count_clutches(players, rounds, by_round, puuid, my_team):
-    """A clutch: at some point in a round my team has exactly 1 alive (me) while
-    the enemy has >=2 alive (a 1v2 or better), and my team wins the round.
-    1v1s are not counted."""
+def _clutch_breakdown(players, rounds, by_round, puuid, my_team):
+    """Won clutches bucketed by size: when I first become the sole survivor on my
+    team facing N enemies (N>=1) and win the round → bucket "1vN" (N capped at 5)."""
     team_of = {p.get("puuid"): p.get("team_id") for p in players}
-    clutches = 0
+    bd = {f"1v{i}": 0 for i in range(1, 6)}
     for idx, r in enumerate(rounds):
-        ks = sorted(by_round.get(idx, []), key=lambda x: x.get("time_in_round_in_ms", 0))
+        rid = r.get("id", idx)
+        ks = sorted(by_round.get(rid, by_round.get(idx, [])),
+                    key=lambda x: x.get("time_in_round_in_ms", 0))
         alive = {p.get("puuid") for p in players if p.get("puuid")}
-        in_clutch = False
+        size = None
         for k in ks:
-            victim = _puuid(k.get("victim"))
-            alive.discard(victim)
+            alive.discard(_puuid(k.get("victim")))
             my_alive = [p for p in alive if team_of.get(p) == my_team]
             enemy_alive = [p for p in alive if team_of.get(p) != my_team and team_of.get(p) is not None]
-            if len(my_alive) == 1 and puuid in my_alive and len(enemy_alive) >= 2:
-                in_clutch = True
-        if in_clutch and r.get("winning_team") == my_team:
-            clutches += 1
-    return clutches
+            if size is None and len(my_alive) == 1 and puuid in my_alive and len(enemy_alive) >= 1:
+                size = min(len(enemy_alive), 5)
+        if size is not None and r.get("winning_team") == my_team:
+            bd[f"1v{size}"] += 1
+    return bd
+
+
+def _kast_rounds(rounds, by_round, puuid):
+    """Count rounds where the player got a Kill, Assist, Survived, or was Traded."""
+    kast = 0
+    for idx, r in enumerate(rounds):
+        rid = r.get("id", idx)
+        ks = sorted(by_round.get(rid, by_round.get(idx, [])),
+                    key=lambda x: x.get("time_in_round_in_ms", 0))
+        victims = {_puuid(k.get("victim")) for k in ks}
+        got_kill = any(_puuid(k.get("killer")) == puuid for k in ks)
+        got_assist = any(any((a or {}).get("puuid") == puuid for a in (k.get("assistants") or []))
+                         for k in ks)
+        survived = puuid not in victims
+        traded = False
+        if not survived:
+            mydeath = next((k for k in ks if _puuid(k.get("victim")) == puuid), None)
+            if mydeath:
+                killer = _puuid(mydeath.get("killer"))
+                t0 = mydeath.get("time_in_round_in_ms", 0)
+                for k in ks:
+                    if (_puuid(k.get("victim")) == killer
+                            and 0 <= k.get("time_in_round_in_ms", 0) - t0 <= TRADE_WINDOW_MS):
+                        traded = True
+                        break
+        if got_kill or got_assist or survived or traded:
+            kast += 1
+    return kast
+
+
+def _other(team):
+    return "Blue" if team == "Red" else "Red"
+
+
+def _side_splits(rounds, puuid, my_team):
+    """Return (attack_won, attack_played, defense_won, defense_played).
+
+    Attacking team per round comes from the plant's team; resolved per half
+    (rounds 0-11 / 12-23). OT rounds counted only when that round has a plant.
+    """
+    n = len(rounds)
+    plant_team = {}
+    for idx, r in enumerate(rounds):
+        pl = r.get("plant")
+        if pl and pl.get("player"):
+            plant_team[idx] = (pl["player"].get("team"))
+
+    def half_attacker(lo, hi):
+        for idx in range(lo, min(hi, n)):
+            if plant_team.get(idx):
+                return plant_team[idx]
+        return None
+
+    first = half_attacker(0, 12)
+    second = half_attacker(12, 24)
+    if first is None and second is not None:
+        first = _other(second)
+    if second is None and first is not None:
+        second = _other(first)
+
+    aw = ap = dw = dp = 0
+    for idx, r in enumerate(rounds):
+        if idx < 12:
+            att = first
+        elif idx < 24:
+            att = second
+        else:
+            att = plant_team.get(idx)
+        if not att:
+            continue
+        won = r.get("winning_team") == my_team
+        if att == my_team:
+            ap += 1
+            aw += 1 if won else 0
+        else:
+            dp += 1
+            dw += 1 if won else 0
+    return aw, ap, dw, dp

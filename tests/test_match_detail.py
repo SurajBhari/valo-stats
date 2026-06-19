@@ -114,6 +114,51 @@ def test_clutch_1v1_not_counted():
     assert d["clutches"] == 0
 
 
+def test_clutch_breakdown_buckets():
+    d = match_detail.extract_detail(_payload(), ME)
+    # round 0 is a 1v2 win → bucket 1v2; no 1v1
+    assert d["clutch_breakdown"]["1v2"] == 1
+    assert d["clutch_breakdown"]["1v1"] == 0
+    assert d["clutches"] == 1  # 1v2+
+
+
+def test_kast_rounds():
+    d = match_detail.extract_detail(_payload(), ME)
+    # ME gets kills in both rounds → KAST in both
+    assert d["kast_rounds"] == 2
+    assert d["rounds_played"] == 2
+
+
+def _side_payload():
+    return {
+        "metadata": {"match_id": "s", "game_length_in_ms": 1234567},
+        "players": [{"puuid": "R", "name": "R", "team_id": "Red"},
+                    {"puuid": "B", "name": "B", "team_id": "Blue"}],
+        "rounds": [
+            {"id": 0, "winning_team": "Red", "plant": {"player": {"puuid": "R", "team": "Red"}}, "defuse": None},
+            {"id": 1, "winning_team": "Blue", "plant": None, "defuse": None},
+        ],
+        "kills": [],
+    }
+
+
+def test_side_splits_attacker():
+    d = match_detail.extract_detail(_side_payload(), "R")  # Red = attacker both rounds
+    assert (d["attack_won"], d["attack_played"]) == (1, 2)
+    assert (d["defense_won"], d["defense_played"]) == (0, 0)
+
+
+def test_side_splits_defender():
+    d = match_detail.extract_detail(_side_payload(), "B")  # Blue = defender both rounds
+    assert (d["defense_won"], d["defense_played"]) == (1, 2)
+    assert (d["attack_won"], d["attack_played"]) == (0, 0)
+
+
+def test_game_length_captured():
+    d = match_detail.extract_detail(_side_payload(), "R")
+    assert d["game_length_ms"] == 1234567
+
+
 def test_missing_player_safe():
     d = match_detail.extract_detail(_payload(), "NOT-IN-MATCH")
     assert d["agent"] == "Unknown"
