@@ -27,12 +27,12 @@ def _payload():
     return {
         "metadata": {"match_id": "match-xyz"},
         "players": [
-            {"puuid": ME, "team_id": "Red", "agent": {"name": "Jett"},
+            {"puuid": ME, "name": "Me", "team_id": "Red", "agent": {"name": "Jett"},
              "ability_casts": {"grenade": 2, "ability1": 4, "ability2": 6, "ultimate": 1},
              "economy": {"spent": {"average": 2500.0}, "loadout_value": {"average": 3600.0}}},
-            {"puuid": MATE, "team_id": "Red", "agent": {"name": "Sage"}},
-            {"puuid": ENEMY1, "team_id": "Blue", "agent": {"name": "Reyna"}},
-            {"puuid": ENEMY2, "team_id": "Blue", "agent": {"name": "Omen"}},
+            {"puuid": MATE, "name": "Mate", "team_id": "Red", "agent": {"name": "Sage"}},
+            {"puuid": ENEMY1, "name": "En1", "team_id": "Blue", "agent": {"name": "Reyna"}},
+            {"puuid": ENEMY2, "name": "En2", "team_id": "Blue", "agent": {"name": "Omen"}},
         ],
         "rounds": [
             {"winning_team": "Red",
@@ -108,3 +108,31 @@ def test_empty_payload_safe():
     assert d["weapons"] == {}
     assert d["multikills"] == {"3k": 0, "4k": 0, "5k": 0}
     assert d["match_id"] is None
+    assert d["opening_deaths"] == 0
+    assert d["won"] is None
+    assert d["teammates"] == []
+
+
+def test_opening_deaths():
+    # Round 0 first kill victim is MATE (not me). Add teams so payload is complete.
+    payload = _payload()
+    payload["teams"] = [{"team_id": "Red", "won": True}, {"team_id": "Blue", "won": False}]
+    d = match_detail.extract_detail(payload, ME)
+    # I am never the victim of a round's first kill -> 0
+    assert d["opening_deaths"] == 0
+    # MATE is the victim of round 0's first kill
+    dm = match_detail.extract_detail(payload, MATE)
+    assert dm["opening_deaths"] == 1
+
+
+def test_won_from_teams():
+    payload = _payload()
+    payload["teams"] = [{"team_id": "Red", "won": True}, {"team_id": "Blue", "won": False}]
+    d = match_detail.extract_detail(payload, ME)  # ME on Red
+    assert d["won"] is True
+
+
+def test_teammates_same_team_excluding_me():
+    d = match_detail.extract_detail(_payload(), ME)
+    # ME on Red with MATE; enemies on Blue
+    assert d["teammates"] == [{"puuid": MATE, "name": "Mate"}]

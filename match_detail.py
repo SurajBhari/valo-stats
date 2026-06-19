@@ -46,11 +46,14 @@ def extract_detail(data, puuid):
                 weapons[wname] += 1
 
     first_bloods = 0
+    opening_deaths = 0
     multikills = {"3k": 0, "4k": 0, "5k": 0}
     for _rnd, ks in by_round.items():
         ordered = sorted(ks, key=lambda x: x.get("time_in_round_in_ms", 0))
         if ordered and _puuid(ordered[0].get("killer")) == puuid:
             first_bloods += 1
+        if ordered and _puuid(ordered[0].get("victim")) == puuid:
+            opening_deaths += 1
         my_kills = sum(1 for x in ks if _puuid(x.get("killer")) == puuid)
         if my_kills >= 5:
             multikills["5k"] += 1
@@ -66,11 +69,22 @@ def extract_detail(data, puuid):
     # --- clutches (best-effort, alive-state reconstruction) ---
     clutches = _count_clutches(players, rounds, by_round, puuid, my_team) if my_team else 0
 
+    # --- match result + teammates ---
+    won = None
+    for t in (data.get("teams") or []):
+        if t.get("team_id") == my_team:
+            won = t.get("won")
+            break
+    teammates = [{"puuid": p.get("puuid"), "name": p.get("name")}
+                 for p in players
+                 if my_team and p.get("team_id") == my_team and p.get("puuid") != puuid]
+
     return {
         "match_id": meta.get("match_id"),
         "agent": agent,
         "weapons": dict(weapons),
         "first_bloods": first_bloods,
+        "opening_deaths": opening_deaths,
         "multikills": multikills,
         "plants": plants,
         "defuses": defuses,
@@ -78,6 +92,8 @@ def extract_detail(data, puuid):
         "ability_casts": ability_casts,
         "spent_avg": spent_avg,
         "loadout_avg": loadout_avg,
+        "won": won,
+        "teammates": teammates,
     }
 
 
