@@ -50,12 +50,13 @@ def normalize_raw_match(raw, puuid):
 
     st = me.get("stats") or {}
     gsm = info.get("gameStartMillis") or 0
+    mode = (info.get("queueId") or "unknown").replace("_", " ").title()
     return {
         "id": info.get("matchId"),
         "started_at": "",
         "timestamp": gsm / 1000.0,
         "map": vc.map_name(info.get("mapId", "")),
-        "mode": info.get("queueId") or "unknown",
+        "mode": mode,
         "agent": vc.agent_name(me.get("characterId", "")),
         "team": team_id or "",
         "won": won,
@@ -179,7 +180,4 @@ class HenrikClient:
                 return None
             return resp.json()["data"]
         return None
-
-    # ------------------------------------------------------------------
-    # Old method — kept for backward compatibility with jobs.py (DR2 removes it)
 

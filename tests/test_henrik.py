@@ -126,7 +126,7 @@ def test_normalize_raw_match_puuid_present():
     assert m is not None
     assert m["id"] == "match-abc"
     assert m["map"] == "Ascent"
-    assert m["mode"] == "competitive"
+    assert m["mode"] == "Competitive"
     assert m["agent"] == "Jett"
     assert m["team"] == "Blue"
     assert m["won"] is True

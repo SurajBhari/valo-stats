@@ -27,7 +27,7 @@ def create_job():
             "oldest_ts": None, "progress_pct": 0.0, "eta_seconds": None,
             "paused_seconds_left": 0, "message": "Starting…",
             "puuid": None, "error": None, "cutoff_ts": None,
-            "total_matches": 0,
+            "total_matches": 0, "skipped": 0,
             "created_at": now_ts,
         }
     return job_id
@@ -73,6 +73,7 @@ def run_job(job_id, name, tag, region, window_seconds, queue, client=None, now=N
                                             start_index + page_size, queue)
             job["status"] = "running"
             job["paused_seconds_left"] = 0
+            job["pages_fetched"] += 1
 
             stop_scan = False
             for entry in page:
@@ -96,6 +97,7 @@ def run_job(job_id, name, tag, region, window_seconds, queue, client=None, now=N
         collected = list(existing)
 
         total = len(in_window_ids)
+        skipped = 0
         for i, match_id in enumerate(in_window_ids):
             if match_id in cached_ids:
                 continue
@@ -104,10 +106,12 @@ def run_job(job_id, name, tag, region, window_seconds, queue, client=None, now=N
             job["status"] = "running"
             job["paused_seconds_left"] = 0
             if raw is None:
+                skipped += 1
                 continue
 
             m = henrik.normalize_raw_match(raw, puuid)
             if m is None:
+                skipped += 1
                 continue
 
             collected.append(m)
@@ -138,8 +142,12 @@ def run_job(job_id, name, tag, region, window_seconds, queue, client=None, now=N
         job["progress_pct"] = 100.0 if total > 0 else 0.0
         job["oldest_ts"] = min((x["timestamp"] for x in in_window), default=now)
         job["eta_seconds"] = 0
+        job["skipped"] = skipped
         job["status"] = "done"
-        job["message"] = f"Done — {matches_parsed} matches"
+        if skipped > 0:
+            job["message"] = f"Done — {matches_parsed} matches ({skipped} unavailable)"
+        else:
+            job["message"] = f"Done — {matches_parsed} matches"
 
     except Exception as e:  # noqa: BLE001 - surface any failure to the UI
         job["status"] = "error"

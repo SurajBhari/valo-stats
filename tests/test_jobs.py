@@ -338,8 +338,41 @@ def test_status_done_and_message(tmp_path, monkeypatch):
 
     job = jobs.get_job(jid)
     assert job["status"] == "done"
-    assert "1" in job["message"]
+    assert "1 matches" in job["message"]
     assert "Done" in job["message"]
+    assert "unavailable" not in job["message"]
+
+
+def test_skipped_matches_reported(tmp_path, monkeypatch):
+    """When get_match_details returns None, match is skipped and reported in message."""
+    monkeypatch.setattr(jobs.config, "CACHE_DIR", str(tmp_path))
+    monkeypatch.setattr(jobs.config, "PAGE_SIZE", PAGE_SIZE)
+
+    puuid = "puuid-test"
+    now = 1_000_000_000.0
+    window = 86_400
+
+    history_pages = [
+        [
+            _history_entry("m1", now - 1000),
+            _history_entry("m2", now - 2000),
+        ]
+    ]
+    # m1 returns None (skipped), m2 succeeds
+    details_map = {
+        "m2": _raw_match("m2", now - 2000, puuid)
+    }
+    client = _FakeClient(history_pages, details_map)
+
+    jid = jobs.create_job()
+    jobs.run_job(jid, "n", "t", "na", window, queue="competitive",
+                 client=client, now=now)
+
+    job = jobs.get_job(jid)
+    assert job["status"] == "done"
+    assert job["skipped"] >= 1
+    assert "unavailable" in job["message"]
+    assert "1 matches (1 unavailable)" in job["message"]
 
 
 def test_cutoff_ts_stored_in_job(tmp_path, monkeypatch):
