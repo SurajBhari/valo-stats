@@ -5,6 +5,8 @@ import os
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+import insights
+
 # WeasyPrint complains loudly to its logger/stderr when its native (GTK/Pango)
 # libraries are missing — expected on Windows dev machines, where we fall back
 # to HTML. Silence that logger so the console isn't polluted; the real PDF path
@@ -19,7 +21,8 @@ _env = Environment(
 
 
 def render_html(stats, player):
-    return _env.get_template("report.html").render(stats=stats, player=player)
+    tips = insights.generate(stats)
+    return _env.get_template("report.html").render(stats=stats, player=player, tips=tips)
 
 
 def render_pdf(stats, player):
