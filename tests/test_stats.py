@@ -232,3 +232,30 @@ def test_weapons_pct_empty():
     assert w["head_pct"] == 0.0
     assert w["body_pct"] == 0.0
     assert w["leg_pct"] == 0.0
+
+
+# 2024-01-01 00:00 UTC is Monday hour 0
+MON_0 = 1704067200.0
+
+
+def test_activity_weekday_and_hour():
+    matches = [
+        _m(timestamp=MON_0, won=True),                 # Mon, hour 0, win
+        _m(timestamp=MON_0 + 15 * 3600, won=False),    # Mon, hour 15, loss
+        _m(timestamp=MON_0 + 86400, won=True),          # Tue, hour 0, win
+    ]
+    act = stats.aggregate(matches)["activity"]
+    wd = {d["day"]: d for d in act["by_weekday"]}
+    assert wd["Mon"]["games"] == 2 and wd["Mon"]["wins"] == 1 and wd["Mon"]["winrate"] == 50.0
+    assert wd["Tue"]["games"] == 1 and wd["Tue"]["winrate"] == 100.0
+    assert wd["Sun"]["games"] == 0
+    assert act["by_hour"][0]["games"] == 2   # two matches at hour 0
+    assert act["by_hour"][15]["games"] == 1
+    assert len(act["by_weekday"]) == 7 and len(act["by_hour"]) == 24
+
+
+def test_activity_empty():
+    act = stats.aggregate([])["activity"]
+    assert len(act["by_weekday"]) == 7
+    assert all(d["games"] == 0 and d["winrate"] == 0.0 for d in act["by_weekday"])
+    assert len(act["by_hour"]) == 24

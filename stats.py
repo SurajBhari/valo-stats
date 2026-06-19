@@ -94,6 +94,24 @@ def _combos(matches):
     return out
 
 
+_WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
+def _activity(matches):
+    """Group matches by UTC weekday and hour → games/wins/winrate buckets."""
+    wd = [{"day": d, "games": 0, "wins": 0} for d in _WEEKDAYS]
+    hr = [{"hour": h, "games": 0, "wins": 0} for h in range(24)]
+    for m in matches:
+        dt = datetime.fromtimestamp(m["timestamp"], timezone.utc)
+        for bucket in (wd[dt.weekday()], hr[dt.hour]):
+            bucket["games"] += 1
+            if m["won"] is True:
+                bucket["wins"] += 1
+    for bucket in wd + hr:
+        bucket["winrate"] = _winrate(bucket["wins"], bucket["games"])
+    return {"by_weekday": wd, "by_hour": hr}
+
+
 def _kda(k, a, d):
     return round((k + a) / (d if d else 1), 2)
 
@@ -142,7 +160,7 @@ def aggregate(matches):
                 "streaks": {"longest_win": 0, "longest_loss": 0,
                             "current": {"type": "", "length": 0}},
                 "days": {"best_day": None, "worst_day": None},
-                "combos": []}
+                "combos": [], "activity": _activity([])}
 
     sorted_matches = sorted(matches, key=lambda m: m["timestamp"])
 
@@ -217,4 +235,5 @@ def aggregate(matches):
         "streaks": _streaks(sorted_matches),
         "days": _days(sorted_matches),
         "combos": _combos(matches),
+        "activity": _activity(matches),
     }
