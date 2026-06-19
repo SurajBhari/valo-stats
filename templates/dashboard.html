@@ -64,7 +64,7 @@
   <div class="bar">
     <a class="btn ghost" href="/">← New report</a>
     <a class="btn" href="/api/report/{{ job_id }}/pdf?name={{ data.player.name|urlencode }}&tag={{ data.player.tag|urlencode }}&region={{ data.player.region|urlencode }}" target="_blank">Export PDF</a>
-    <span class="muted">{{ data.overview.matches }} matches · {{ data.overview.date_from }} → {{ data.overview.date_to }}</span>
+    <span class="muted">{{ data.overview.matches }} matches · {{ data.overview.date_from }} → {{ data.overview.date_to }}{% if version %} · build {{ version }}{% endif %}</span>
   </div>
 
   <div class="hero">

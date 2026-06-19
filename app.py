@@ -17,7 +17,12 @@ app = Flask(__name__)
 
 @app.route("/")
 def index():
-    return render_template("index.html", regions=config.REGIONS)
+    return render_template("index.html", regions=config.REGIONS, version=config.GIT_COMMIT)
+
+
+@app.route("/api/version")
+def version():
+    return jsonify({"commit": config.GIT_COMMIT})
 
 
 @app.route("/api/report/start", methods=["POST"])
@@ -86,6 +91,8 @@ def _load_report_context(job_id):
             player["rank_icon_url"] = mmr["rank_icon_url"]
             player["rank_tier"] = mmr["tier"]
             player["rr"] = mmr["rr"]
+            player["peak"] = mmr.get("peak")
+            player["peak_season"] = mmr.get("peak_season")
     except Exception:
         pass
     return agg, details, player, matches
@@ -98,7 +105,7 @@ def dashboard(job_id):
         return jsonify({"error": "job not ready"}), 400
     agg, details, player, matches = ctx
     data = report.build_report_data(agg, player, details, matches)
-    return render_template("dashboard.html", data=data, job_id=job_id)
+    return render_template("dashboard.html", data=data, job_id=job_id, version=config.GIT_COMMIT)
 
 
 @app.route("/api/report/<job_id>/pdf")

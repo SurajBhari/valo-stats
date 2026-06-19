@@ -16,3 +16,22 @@ DEFAULT_WINDOW = "1m"
 
 QUEUES = {"competitive": "competitive", "unrated": "unrated", "all": None}
 DEFAULT_QUEUE = "competitive"
+
+
+def _git_commit():
+    """Short commit the server is running. Render sets RENDER_GIT_COMMIT on deploy;
+    fall back to a local `git rev-parse` for dev."""
+    sha = os.getenv("RENDER_GIT_COMMIT")
+    if sha:
+        return sha[:7]
+    try:
+        import subprocess
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=os.path.dirname(__file__), stderr=subprocess.DEVNULL,
+        ).decode().strip()
+    except Exception:
+        return "unknown"
+
+
+GIT_COMMIT = _git_commit()
