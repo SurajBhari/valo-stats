@@ -5,6 +5,7 @@ import os
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+import assets
 import insights
 
 # WeasyPrint complains loudly to its logger/stderr when its native (GTK/Pango)
@@ -22,7 +23,15 @@ _env = Environment(
 
 def render_html(stats, player):
     tips = insights.generate(stats)
-    return _env.get_template("report.html").render(stats=stats, player=player, tips=tips)
+    agent_icons = {a["name"]: assets.agent_icon(a["name"]) for a in stats.get("per_agent", [])}
+    map_icons = {m["name"]: assets.map_icon(m["name"]) for m in stats.get("per_map", [])}
+    player = dict(player)
+    player["card_img"] = assets.card_image(player.get("card"))
+    player["rank_img"] = assets.rank_icon(player.get("rank_icon_url"))
+    player["border_img"] = assets.level_border(player.get("level"))
+    return _env.get_template("report.html").render(
+        stats=stats, player=player, tips=tips,
+        agent_icons=agent_icons, map_icons=map_icons)
 
 
 def render_pdf(stats, player):

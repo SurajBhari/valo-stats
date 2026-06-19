@@ -104,7 +104,33 @@ class HenrikClient:
         d = resp.json()["data"]
         self._sleep_if_throttled(resp)
         return {"puuid": d["puuid"], "region": d.get("region", ""),
-                "level": d.get("account_level", 0)}
+                "level": d.get("account_level", 0),
+                "card": d.get("card")}
+
+    def get_mmr(self, puuid, region):
+        """Current competitive rank via v2 by-puuid mmr.
+
+        Returns {"tier": str, "rank_icon_url": str, "rr": int} or None
+        (unranked / not found / any non-200).
+        """
+        url = (f"{config.API_BASE}/valorant/v2/by-puuid/mmr"
+               f"/{quote(region, safe='')}/{quote(puuid, safe='')}")
+        try:
+            resp = self._request(url)
+        except Exception:
+            return None
+        if resp.status_code != 200:
+            return None
+        cur = (resp.json().get("data") or {}).get("current_data") or {}
+        self._sleep_if_throttled(resp)
+        tier = cur.get("currenttierpatched")
+        if not tier:
+            return None
+        return {
+            "tier": tier,
+            "rank_icon_url": (cur.get("images") or {}).get("large"),
+            "rr": cur.get("ranking_in_tier", 0),
+        }
 
     def get_stored_matches(self, puuid, region, page, size, mode):
         """Fetch stored matches via GET /valorant/v1/by-puuid/stored-matches/{region}/{puuid}.

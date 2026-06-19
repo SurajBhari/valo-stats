@@ -376,6 +376,58 @@ def test_get_account_url_encodes_slash(monkeypatch):
     assert "bad/name" not in captured[0]
 
 
+def test_get_account_returns_card_and_level(monkeypatch):
+    c = henrik.HenrikClient(api_key="k")
+    monkeypatch.setattr(c, "_request", lambda url, params=None: _Resp(
+        200, {"data": {"puuid": "x", "region": "na", "account_level": 321,
+                       "card": "card-uuid-1"}}, {"x-ratelimit-remaining": "20"}))
+    acc = c.get_account("Name", "tag")
+    assert acc["card"] == "card-uuid-1"
+    assert acc["level"] == 321
+
+
+# ---------------------------------------------------------------------------
+# get_mmr
+# ---------------------------------------------------------------------------
+
+_MMR_RESP = {"data": {"current_data": {
+    "currenttier": 20, "currenttierpatched": "Diamond 3",
+    "images": {"large": "http://media/large.png", "small": "http://media/small.png"},
+    "ranking_in_tier": 41,
+}}}
+
+
+def test_get_mmr_parses_tier_icon_rr(monkeypatch):
+    c = henrik.HenrikClient(api_key="k")
+    monkeypatch.setattr(c, "_request",
+                        lambda url, params=None: _Resp(200, _MMR_RESP, {"x-ratelimit-remaining": "20"}))
+    mmr = c.get_mmr("puuid-x", "ap")
+    assert mmr == {"tier": "Diamond 3", "rank_icon_url": "http://media/large.png", "rr": 41}
+
+
+def test_get_mmr_url_has_region_and_puuid(monkeypatch):
+    captured = []
+    monkeypatch.setattr(henrik.HenrikClient, "_request",
+                        lambda self, url, params=None: (captured.append(url),
+                                                        _Resp(200, _MMR_RESP, {}))[1])
+    henrik.HenrikClient(api_key="k").get_mmr("puuid-abc", "eu")
+    assert "eu" in captured[0] and "puuid-abc" in captured[0] and "mmr" in captured[0]
+
+
+def test_get_mmr_none_on_non_200(monkeypatch):
+    c = henrik.HenrikClient(api_key="k")
+    monkeypatch.setattr(c, "_request", lambda url, params=None: _Resp(404, {}, {}))
+    assert c.get_mmr("p", "na") is None
+
+
+def test_get_mmr_none_when_unranked(monkeypatch):
+    """200 but no currenttierpatched (unranked) → None."""
+    c = henrik.HenrikClient(api_key="k")
+    monkeypatch.setattr(c, "_request",
+                        lambda url, params=None: _Resp(200, {"data": {"current_data": {}}}, {}))
+    assert c.get_mmr("p", "na") is None
+
+
 # ---------------------------------------------------------------------------
 # Rate-limit / throttle helpers
 # ---------------------------------------------------------------------------

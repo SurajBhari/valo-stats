@@ -41,11 +41,35 @@
 
   .hitlegend { font-size: 11px; margin-top: 6px; }
   .hitlegend .swatch { display: inline-block; width: 9px; height: 9px; background: #ff4655; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+
+  .hero { position: relative; border-radius: 10px; overflow: hidden; margin-bottom: 6px;
+          border: 1px solid #2a2e38; background: #1c1f27; }
+  .hero img.card { width: 100%; height: 92px; object-fit: cover; display: block; opacity: 0.5; }
+  .hero .herotext { position: absolute; left: 16px; top: 14px; }
+  .hero .rank { position: absolute; right: 14px; top: 10px; text-align: center; }
+  .hero .rank img { width: 56px; height: 56px; display: block; margin: 0 auto; }
+  .hero .rank .rr { font-size: 11px; color: #d4d7e0; }
+  .lvl { display: inline-block; vertical-align: middle; position: relative; margin-left: 8px; }
+  .lvl img { height: 26px; vertical-align: middle; }
+  .icn { width: 20px; height: 20px; vertical-align: middle; margin-right: 6px; border-radius: 3px; }
 </style></head><body>
 
-  <h1>{{ player.name }}<span class="accent">#{{ player.tag }}</span></h1>
-  <p class="muted">{{ player.region|upper }}
+  {% if player.card_img %}
+  <div class="hero">
+    <img class="card" src="{{ player.card_img }}" alt="">
+    <div class="herotext">
+      <h1>{{ player.name }}<span class="accent">#{{ player.tag }}</span></h1>
+      <p class="muted">{{ player.region|upper }}{% if player.level %} · Level {{ player.level }}{% endif %}
+        {% if stats.overview.matches %}· {{ stats.overview.date_from }} → {{ stats.overview.date_to }} · {{ stats.overview.matches }} matches{% endif %}</p>
+    </div>
+    {% if player.rank_img %}<div class="rank"><img src="{{ player.rank_img }}" alt="">{% if player.rank_tier %}<div class="rr">{{ player.rank_tier }}{% if player.rr is not none %} · {{ player.rr }}RR{% endif %}</div>{% endif %}</div>{% endif %}
+  </div>
+  {% else %}
+  <h1>{{ player.name }}<span class="accent">#{{ player.tag }}</span>
+    {% if player.border_img %}<span class="lvl"><img src="{{ player.border_img }}" alt=""></span>{% endif %}</h1>
+  <p class="muted">{{ player.region|upper }}{% if player.level %} · Level {{ player.level }}{% endif %}
     {% if stats.overview.matches %}· {{ stats.overview.date_from }} → {{ stats.overview.date_to }} · {{ stats.overview.matches }} matches{% endif %}</p>
+  {% endif %}
 
   {% if not stats.overview.matches %}
   <div class="panel"><p>No matches found in this window. Try a longer window.</p></div>
@@ -107,7 +131,7 @@
       <table>
         <tr><th>Map</th><th>Games</th><th>Winrate</th><th>KDA</th><th>ACS</th></tr>
         {% for m in stats.per_map %}
-        <tr><td>{{ m.name }}</td><td>{{ m.matches }}</td>
+        <tr><td>{% if map_icons[m.name] %}<img class="icn" src="{{ map_icons[m.name] }}" alt="">{% endif %}{{ m.name }}</td><td>{{ m.matches }}</td>
           <td>{{ m.winrate }}% <span class="bar"><span style="width: {{ m.winrate }}%"></span></span></td>
           <td>{{ m.kda }}</td><td>{{ m.acs }}</td></tr>
         {% endfor %}
@@ -117,7 +141,7 @@
       <table>
         <tr><th>Agent</th><th>Games</th><th>Winrate</th><th>KDA</th><th>ACS</th><th>HS%</th></tr>
         {% for a in stats.per_agent %}
-        <tr><td>{{ a.name }}</td><td>{{ a.matches }}</td>
+        <tr><td>{% if agent_icons[a.name] %}<img class="icn" src="{{ agent_icons[a.name] }}" alt="">{% endif %}{{ a.name }}</td><td>{{ a.matches }}</td>
           <td>{{ a.winrate }}% <span class="bar"><span style="width: {{ a.winrate }}%"></span></span></td>
           <td>{{ a.kda }}</td><td>{{ a.acs }}</td><td>{{ a.hs_pct }}%</td></tr>
         {% endfor %}

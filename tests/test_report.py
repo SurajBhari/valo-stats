@@ -1,8 +1,24 @@
 """Smoke tests for report.py — renders without Jinja errors for populated
-and empty aggregates, and render_pdf returns bytes or None without raising."""
+and empty aggregates, and render_pdf returns bytes or None without raising.
 
+assets.* is stubbed so rendering is offline and deterministic.
+"""
+
+import pytest
+
+import assets
 import report
 import stats
+
+
+@pytest.fixture(autouse=True)
+def _no_network(monkeypatch):
+    """Default: every asset helper returns None (offline, no icons)."""
+    monkeypatch.setattr(assets, "agent_icon", lambda name: None)
+    monkeypatch.setattr(assets, "map_icon", lambda name: None)
+    monkeypatch.setattr(assets, "card_image", lambda uuid: None)
+    monkeypatch.setattr(assets, "rank_icon", lambda url: None)
+    monkeypatch.setattr(assets, "level_border", lambda level: None)
 
 
 def _match(ts, won, agent="Jett", map_="Ascent", head=10, body=20, leg=5):
@@ -54,3 +70,23 @@ def test_render_pdf_returns_bytes_or_none():
 def test_render_pdf_empty_does_not_raise():
     result = report.render_pdf(stats.aggregate([]), _player())
     assert result is None or isinstance(result, bytes)
+
+
+def test_icons_rendered_when_assets_available(monkeypatch):
+    monkeypatch.setattr(assets, "agent_icon", lambda name: "data:image/png;base64,AAA")
+    monkeypatch.setattr(assets, "map_icon", lambda name: "data:image/png;base64,BBB")
+    monkeypatch.setattr(assets, "card_image", lambda uuid: "data:image/png;base64,CCC")
+    monkeypatch.setattr(assets, "rank_icon", lambda url: "data:image/png;base64,DDD")
+    player = dict(_player(), card="card-uuid", rank_icon_url="http://r",
+                  rank_tier="Diamond 3", rr=41, level=321)
+    html = report.render_html(_populated_agg(), player)
+    assert "data:image/png;base64,AAA" in html  # agent icon
+    assert "data:image/png;base64,BBB" in html  # map icon
+    assert "data:image/png;base64,CCC" in html  # player card
+    assert "data:image/png;base64,DDD" in html  # rank icon
+    assert "Diamond 3" in html
+
+
+def test_no_icons_when_assets_unavailable():
+    html = report.render_html(_populated_agg(), dict(_player(), card="x"))
+    assert "<img" not in html  # all asset helpers return None -> no images

@@ -7,6 +7,7 @@ from flask import Flask, Response, jsonify, render_template, request
 
 import cache
 import config
+import henrik
 import jobs
 import report
 import stats
@@ -67,6 +68,20 @@ def pdf(job_id):
     player = {"name": request.args.get("name", ""),
               "tag": request.args.get("tag", ""),
               "region": request.args.get("region", "")}
+    # Best-effort profile artwork (card, level, rank). Never block the report.
+    region = player["region"] or job.get("region", "")
+    try:
+        client = henrik.HenrikClient()
+        acc = client.get_account(player["name"], player["tag"])
+        player["card"] = acc.get("card")
+        player["level"] = acc.get("level")
+        mmr = client.get_mmr(job["puuid"], region)
+        if mmr:
+            player["rank_icon_url"] = mmr["rank_icon_url"]
+            player["rank_tier"] = mmr["tier"]
+            player["rr"] = mmr["rr"]
+    except Exception:
+        pass
     data = report.render_pdf(agg, player)
     if data is None:
         html = report.render_html(agg, player)
