@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ data.player.name }}#{{ data.player.tag }} — Valorant Stats</title>
+<style>
+  :root { --bg:#0f1115; --panel:#1c1f27; --line:#2a2e38; --red:#ff4655; --txt:#e6e8ee; --mut:#8a90a2; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt);
+         font-family:"Segoe UI",system-ui,Arial,sans-serif; }
+  a { color:var(--red); text-decoration:none; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 18px 20px 64px; }
+
+  .hero { position:relative; border-radius:14px; overflow:hidden; border:1px solid var(--line);
+          background:var(--panel); margin-bottom:18px; }
+  .hero .bg { width:100%; height:130px; object-fit:cover; opacity:.45; display:block; }
+  .hero .body { position:absolute; inset:0; display:flex; align-items:center;
+                justify-content:space-between; padding:0 22px; }
+  .hero h1 { margin:0; font-size:30px; letter-spacing:.5px; }
+  .hero h1 .accent { color:var(--red); }
+  .hero .meta { color:var(--mut); font-size:13px; margin-top:4px; }
+  .hero .rank { text-align:center; }
+  .hero .rank img { height:64px; display:block; margin:0 auto; }
+  .hero .rank .t { font-size:12px; color:#d4d7e0; }
+
+  .kpis { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:18px; }
+  .kpi { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; text-align:center; }
+  .kpi .v { font-size:26px; font-weight:700; }
+  .kpi .l { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--mut); margin-top:2px; }
+
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:1.5px; color:var(--red);
+       margin:26px 0 12px; border-bottom:1px solid var(--line); padding-bottom:6px; }
+  .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; }
+  @media (max-width:760px){ .grid{grid-template-columns:1fr;} .kpis{grid-template-columns:repeat(2,1fr);} .hero .body{position:static;padding:16px;} .hero .bg{height:90px;} }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  .card h3 { margin:0 0 10px; font-size:13px; color:#cfd3df; font-weight:600; }
+  .chartbox { position:relative; height:260px; }
+  .full { grid-column:1 / -1; }
+
+  .tiles { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .tile { background:#15171c; border:1px solid var(--line); border-radius:8px; padding:12px; text-align:center; }
+  .tile .v { font-size:22px; font-weight:700; }
+  .tile .l { font-size:9px; text-transform:uppercase; letter-spacing:1px; color:var(--mut); }
+  @media (max-width:760px){ .tiles{grid-template-columns:repeat(2,1fr);} }
+
+  table { width:100%; border-collapse:collapse; }
+  th,td { text-align:left; padding:7px 8px; font-size:12px; border-bottom:1px solid #23262f; }
+  th { color:var(--mut); text-transform:uppercase; font-size:9px; letter-spacing:.5px; }
+  td img { height:18px; vertical-align:middle; margin-right:8px; border-radius:3px; }
+  .tips li { margin:7px 0; font-size:13px; color:#d4d7e0; }
+  .tips li::marker { color:var(--red); }
+
+  .bar { topbar:0; display:flex; gap:12px; align-items:center; margin-bottom:14px; flex-wrap:wrap; }
+  .btn { background:var(--red); color:#fff; border:none; border-radius:8px; padding:9px 16px;
+         font-size:13px; font-weight:600; cursor:pointer; }
+  .btn.ghost { background:transparent; border:1px solid var(--line); color:var(--txt); }
+  .muted { color:var(--mut); font-size:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="bar">
+    <a class="btn ghost" href="/">← New report</a>
+    <a class="btn" href="/api/report/{{ job_id }}/pdf?name={{ data.player.name|urlencode }}&tag={{ data.player.tag|urlencode }}&region={{ data.player.region|urlencode }}" target="_blank">Export PDF</a>
+    <span class="muted">{{ data.overview.matches }} matches · {{ data.overview.date_from }} → {{ data.overview.date_to }}</span>
+  </div>
+
+  <div class="hero">
+    {% if data.player.card_url %}<img class="bg" src="{{ data.player.card_url }}" alt="">{% else %}<div class="bg" style="height:90px;"></div>{% endif %}
+    <div class="body">
+      <div>
+        <h1>{{ data.player.name }}<span class="accent">#{{ data.player.tag }}</span></h1>
+        <div class="meta">{{ data.player.region|upper }}{% if data.player.level %} · Level {{ data.player.level }}{% endif %}</div>
+      </div>
+      {% if data.player.rank_url %}<div class="rank"><img src="{{ data.player.rank_url }}" alt="">{% if data.player.rank_tier %}<div class="t">{{ data.player.rank_tier }}{% if data.player.rr is not none %} · {{ data.player.rr }}RR{% endif %}</div>{% endif %}</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="v">{{ data.overview.winrate }}%</div><div class="l">Winrate</div></div>
+    <div class="kpi"><div class="v">{{ data.overview.kda }}</div><div class="l">KDA</div></div>
+    <div class="kpi"><div class="v">{{ data.overview.hs_pct }}%</div><div class="l">Headshot</div></div>
+    <div class="kpi"><div class="v">{{ data.overview.acs }}</div><div class="l">ACS</div></div>
+    <div class="kpi"><div class="v">{{ data.overview.adr }}</div><div class="l">ADR</div></div>
+  </div>
+
+  <h2>Trends &amp; performance</h2>
+  <div class="grid">
+    <div class="card full"><h3>Winrate &amp; ACS over months</h3><div class="chartbox"><canvas id="c-trends"></canvas></div></div>
+    <div class="card"><h3>Winrate by map</h3><div class="chartbox"><canvas id="c-maps"></canvas></div></div>
+    <div class="card"><h3>Winrate by agent</h3><div class="chartbox"><canvas id="c-agents"></canvas></div></div>
+  </div>
+
+  <h2>Arsenal</h2>
+  <div class="grid">
+    <div class="card"><h3>Top weapons (kills)</h3><div class="chartbox"><canvas id="c-weapons"></canvas></div></div>
+    <div class="card"><h3>Shot placement</h3><div class="chartbox"><canvas id="c-shots"></canvas></div></div>
+  </div>
+
+  {% if data.detail %}
+  <h2>Combat</h2>
+  <div class="tiles">
+    <div class="tile"><div class="v">{{ data.detail.combat.opening_winrate }}%</div><div class="l">Opening duels</div></div>
+    <div class="tile"><div class="v">{{ data.detail.combat.first_bloods }}</div><div class="l">First bloods</div></div>
+    <div class="tile"><div class="v">{{ data.detail.combat.clutches }}</div><div class="l">Clutches</div></div>
+    <div class="tile"><div class="v">{{ data.detail.combat.aces }}</div><div class="l">Aces</div></div>
+    <div class="tile"><div class="v">{{ data.detail.combat.multikills['3k'] }}/{{ data.detail.combat.multikills['4k'] }}</div><div class="l">3K / 4K</div></div>
+    <div class="tile"><div class="v">{{ data.detail.combat.plants }}</div><div class="l">Plants</div></div>
+    <div class="tile"><div class="v">{{ data.detail.combat.defuses }}</div><div class="l">Defuses</div></div>
+    <div class="tile"><div class="v">{{ data.detail.economy.spent_avg|round|int }}</div><div class="l">Avg spend</div></div>
+  </div>
+  {% endif %}
+
+  <h2>When you play</h2>
+  <div class="grid">
+    <div class="card"><h3>Matches by hour (UTC)</h3><div class="chartbox"><canvas id="c-hours"></canvas></div></div>
+    <div class="card"><h3>Winrate by weekday</h3><div class="chartbox"><canvas id="c-weekday"></canvas></div></div>
+  </div>
+
+  <div class="grid" style="margin-top:16px;">
+    <div class="card">
+      <h3>Maps</h3>
+      <table><tr><th>Map</th><th>Games</th><th>WR</th><th>KDA</th><th>ACS</th></tr>
+      {% for m in data.per_map %}<tr><td>{% if m.icon_url %}<img src="{{ m.icon_url }}">{% endif %}{{ m.name }}</td><td>{{ m.matches }}</td><td>{{ m.winrate }}%</td><td>{{ m.kda }}</td><td>{{ m.acs }}</td></tr>{% endfor %}
+      </table>
+    </div>
+    <div class="card">
+      <h3>Agents</h3>
+      <table><tr><th>Agent</th><th>Games</th><th>WR</th><th>KDA</th><th>HS%</th></tr>
+      {% for a in data.per_agent %}<tr><td>{% if a.icon_url %}<img src="{{ a.icon_url }}">{% endif %}{{ a.name }}</td><td>{{ a.matches }}</td><td>{{ a.winrate }}%</td><td>{{ a.kda }}</td><td>{{ a.hs_pct }}%</td></tr>{% endfor %}
+      </table>
+    </div>
+  </div>
+
+  {% if data.detail and data.detail.teammates %}
+  <h2>Frequent teammates</h2>
+  <div class="card">
+    <table><tr><th>Player</th><th>Games</th><th>Winrate</th></tr>
+    {% for tm in data.detail.teammates[:10] %}<tr><td>{{ tm.name }}</td><td>{{ tm.games }}</td><td>{{ tm.winrate }}%</td></tr>{% endfor %}
+    </table>
+  </div>
+  {% endif %}
+
+  <h2>Insights</h2>
+  <div class="card"><ul class="tips">{% for t in data.tips %}<li>{{ t }}</li>{% endfor %}</ul></div>
+
+</div>
+
+<script id="report-data" type="application/json">{{ data|tojson }}</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
+        integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4"
+        crossorigin="anonymous"></script>
+<script src="/static/dashboard.js"></script>
+</body>
+</html>

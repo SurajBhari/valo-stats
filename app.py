@@ -55,11 +55,15 @@ def stream(job_id):
     return Response(gen(), mimetype="text/event-stream")
 
 
-@app.route("/api/report/<job_id>/pdf")
-def pdf(job_id):
+def _load_report_context(job_id):
+    """Return (agg, details, player) for a completed job, or None if not ready.
+
+    Loads window-filtered matches + cached details and best-effort enriches the
+    player with profile artwork (card, level, rank). Profile fetch never blocks.
+    """
     job = jobs.get_job(job_id)
     if job is None or job["status"] != "done":
-        return jsonify({"error": "job not ready"}), 400
+        return None
     matches = cache.load_matches(job["puuid"])
     cutoff_ts = job.get("cutoff_ts")
     if cutoff_ts is not None:
@@ -71,7 +75,6 @@ def pdf(job_id):
     player = {"name": request.args.get("name", ""),
               "tag": request.args.get("tag", ""),
               "region": request.args.get("region", "")}
-    # Best-effort profile artwork (card, level, rank). Never block the report.
     region = player["region"] or job.get("region", "")
     try:
         client = henrik.HenrikClient()
@@ -85,6 +88,25 @@ def pdf(job_id):
             player["rr"] = mmr["rr"]
     except Exception:
         pass
+    return agg, details, player
+
+
+@app.route("/api/report/<job_id>/dashboard")
+def dashboard(job_id):
+    ctx = _load_report_context(job_id)
+    if ctx is None:
+        return jsonify({"error": "job not ready"}), 400
+    agg, details, player = ctx
+    data = report.build_report_data(agg, player, details)
+    return render_template("dashboard.html", data=data, job_id=job_id)
+
+
+@app.route("/api/report/<job_id>/pdf")
+def pdf(job_id):
+    ctx = _load_report_context(job_id)
+    if ctx is None:
+        return jsonify({"error": "job not ready"}), 400
+    agg, details, player = ctx
     data = report.render_pdf(agg, player, details)
     if data is None:
         html = report.render_html(agg, player, details)
