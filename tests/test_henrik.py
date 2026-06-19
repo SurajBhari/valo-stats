@@ -390,11 +390,14 @@ def test_get_account_returns_card_and_level(monkeypatch):
 # get_mmr
 # ---------------------------------------------------------------------------
 
-_MMR_RESP = {"data": {"current_data": {
-    "currenttier": 20, "currenttierpatched": "Diamond 3",
-    "images": {"large": "http://media/large.png", "small": "http://media/small.png"},
-    "ranking_in_tier": 41,
-}}}
+_MMR_RESP = {"data": {
+    "current_data": {
+        "currenttier": 20, "currenttierpatched": "Diamond 3",
+        "images": {"large": "http://media/large.png", "small": "http://media/small.png"},
+        "ranking_in_tier": 41,
+    },
+    "highest_rank": {"tier": 23, "patched_tier": "Ascendant 3", "season": "e10a6"},
+}}
 
 
 def test_get_mmr_parses_tier_icon_rr(monkeypatch):
@@ -402,7 +405,8 @@ def test_get_mmr_parses_tier_icon_rr(monkeypatch):
     monkeypatch.setattr(c, "_request",
                         lambda url, params=None: _Resp(200, _MMR_RESP, {"x-ratelimit-remaining": "20"}))
     mmr = c.get_mmr("puuid-x", "ap")
-    assert mmr == {"tier": "Diamond 3", "rank_icon_url": "http://media/large.png", "rr": 41}
+    assert mmr == {"tier": "Diamond 3", "rank_icon_url": "http://media/large.png", "rr": 41,
+                   "peak": "Ascendant 3", "peak_season": "e10a6"}
 
 
 def test_get_mmr_url_has_region_and_puuid(monkeypatch):

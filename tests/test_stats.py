@@ -36,6 +36,12 @@ def test_overview_efficiency_per_round():
 def test_overview_efficiency_empty():
     ov = stats.aggregate([])["overview"]
     assert ov["kpr"] == 0.0 and ov["dpr"] == 0.0 and ov["apr"] == 0.0 and ov["dd_delta"] == 0.0
+    assert ov["kd"] == 0.0
+
+
+def test_overview_kd_ratio():
+    ov = stats.aggregate([_m(kills=20, deaths=10, assists=5)])["overview"]
+    assert ov["kd"] == 2.0
 
 
 def test_headshot_and_acs():

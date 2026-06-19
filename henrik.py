@@ -121,15 +121,19 @@ class HenrikClient:
             return None
         if resp.status_code != 200:
             return None
-        cur = (resp.json().get("data") or {}).get("current_data") or {}
+        data = resp.json().get("data") or {}
+        cur = data.get("current_data") or {}
         self._sleep_if_throttled(resp)
         tier = cur.get("currenttierpatched")
         if not tier:
             return None
+        peak = data.get("highest_rank") or {}
         return {
             "tier": tier,
             "rank_icon_url": (cur.get("images") or {}).get("large"),
             "rr": cur.get("ranking_in_tier", 0),
+            "peak": peak.get("patched_tier"),
+            "peak_season": peak.get("season"),
         }
 
     def get_stored_matches(self, puuid, region, page, size, mode):
