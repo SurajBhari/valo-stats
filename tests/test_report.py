@@ -26,10 +26,19 @@ def _details():
     return [{
         "match_id": "m1", "agent": "Jett",
         "weapons": {"Vandal": 12, "Classic": 4},
-        "first_bloods": 3, "multikills": {"3k": 2, "4k": 1, "5k": 1},
+        "first_bloods": 3, "opening_deaths": 1, "multikills": {"3k": 2, "4k": 1, "5k": 1},
         "plants": 2, "defuses": 1, "clutches": 1,
         "ability_casts": {"grenade": 5, "ability1": 8, "ability2": 9, "ultimate": 2},
         "spent_avg": 2500.0, "loadout_avg": 3600.0,
+        "won": True, "teammates": [{"puuid": "p1", "name": "Buddy"}],
+    }, {
+        "match_id": "m2", "agent": "Sage",
+        "weapons": {"Vandal": 6}, "first_bloods": 1, "opening_deaths": 2,
+        "multikills": {"3k": 0, "4k": 0, "5k": 0},
+        "plants": 0, "defuses": 1, "clutches": 0,
+        "ability_casts": {"grenade": 1, "ability1": 2, "ability2": 3, "ultimate": 1},
+        "spent_avg": 2200.0, "loadout_avg": 3100.0,
+        "won": False, "teammates": [{"puuid": "p1", "name": "Buddy"}],
     }]
 
 
@@ -122,3 +131,19 @@ def test_arsenal_section_absent_without_details():
 def test_render_pdf_with_details_bytes_or_none():
     result = report.render_pdf(_populated_agg(), _player(), details=_details())
     assert result is None or isinstance(result, bytes)
+
+
+def test_opening_duels_and_teammates_rendered():
+    html = report.render_html(_populated_agg(), _player(), details=_details())
+    assert "Opening duels" in html
+    assert "Frequent teammates" in html
+    assert "Buddy" in html
+
+
+def test_activity_and_trend_sections_present():
+    html = report.render_html(_populated_agg(), _player())
+    assert "When you play" in html
+    # weekday header present
+    assert "Mon" in html and "Sun" in html
+    # trend chart svg polyline (populated agg spans multiple months? guard either way)
+    assert "Monthly trend" in html

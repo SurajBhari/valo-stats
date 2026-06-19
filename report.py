@@ -6,6 +6,7 @@ import os
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 import assets
+import charts
 import detail_stats
 import insights
 
@@ -37,10 +38,15 @@ def render_html(stats, player, details=None):
         dstats = detail_stats.aggregate_details(details)
         weapon_icons = {w["name"]: assets.weapon_icon(w["name"]) for w in dstats["weapons"]}
 
+    trends = stats.get("trends") or []
+    trend_pts = charts.polyline_points([t["winrate"] for t in trends], 560, 90)
+    max_hour_games = max((h["games"] for h in stats.get("activity", {}).get("by_hour", [])), default=0)
+
     return _env.get_template("report.html").render(
         stats=stats, player=player, tips=tips,
         agent_icons=agent_icons, map_icons=map_icons,
-        dstats=dstats, weapon_icons=weapon_icons)
+        dstats=dstats, weapon_icons=weapon_icons,
+        trend_pts=trend_pts, max_hour_games=max_hour_games)
 
 
 def render_pdf(stats, player, details=None):

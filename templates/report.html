@@ -60,6 +60,12 @@
   .combat .ci { display: inline-block; width: 32%; text-align: center; padding: 8px 0; vertical-align: top; }
   .combat .cv { display: block; font-size: 20px; font-weight: 700; color: #fff; }
   .combat .cl { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #8a90a2; }
+  .chart { background: #1c1f27; border: 1px solid #2a2e38; border-radius: 8px; padding: 10px 12px; }
+  .chart svg { width: 100%; height: auto; display: block; }
+  .hours { white-space: nowrap; }
+  .hbar { display: inline-block; width: 4%; vertical-align: bottom; text-align: center; }
+  .hbar .b { background: #ff4655; border-radius: 1px 1px 0 0; min-height: 1px; }
+  .hbar .hl { font-size: 7px; color: #5c6173; }
 </style></head><body>
   <div class="page">
 
@@ -172,6 +178,7 @@
     <div class="col col-right">
       <div class="panel">
         <div class="combat">
+          <div class="ci"><span class="cv">{{ dstats.combat.opening_winrate }}%</span><span class="cl">Opening duels ({{ dstats.combat.opening_kills }}/{{ dstats.combat.opening_deaths }})</span></div>
           <div class="ci"><span class="cv">{{ dstats.combat.first_bloods }}</span><span class="cl">First bloods</span></div>
           <div class="ci"><span class="cv">{{ dstats.combat.clutches }}</span><span class="cl">Clutches</span></div>
           <div class="ci"><span class="cv">{{ dstats.combat.aces }}</span><span class="cl">Aces (5K)</span></div>
@@ -186,6 +193,17 @@
       </div>
     </div>
   </div>
+
+  {% if dstats.teammates %}
+  <h2>Frequent teammates</h2>
+  <table>
+    <tr><th>Player</th><th>Games</th><th>Winrate</th></tr>
+    {% for tm in dstats.teammates[:8] %}
+    <tr><td>{{ tm.name }}</td><td>{{ tm.games }}</td>
+      <td>{{ tm.winrate }}% <span class="bar"><span style="width: {{ tm.winrate }}%"></span></span></td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
   {% endif %}
 
   <h2>Insights</h2>
@@ -196,12 +214,36 @@
   </div>
 
   <h2>Monthly trend</h2>
+  {% if trend_pts and stats.trends|length > 1 %}
+  <div class="chart">
+    <svg viewBox="0 0 560 90" preserveAspectRatio="none">
+      <polyline points="{{ trend_pts }}" fill="none" stroke="#ff4655" stroke-width="2"
+                stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>
+    <div class="muted" style="font-size:10px;">Winrate over {{ stats.trends|length }} months</div>
+  </div>
+  {% endif %}
   <table>
     <tr><th>Month</th><th>Games</th><th>Winrate</th><th>ACS</th></tr>
     {% for t in stats.trends %}
     <tr><td>{{ t.month }}</td><td>{{ t.matches }}</td><td>{{ t.winrate }}%</td><td>{{ t.acs }}</td></tr>
     {% endfor %}
   </table>
+
+  <h2>When you play</h2>
+  <table>
+    <tr><th>Day</th>{% for d in stats.activity.by_weekday %}<th>{{ d.day }}</th>{% endfor %}</tr>
+    <tr><td class="muted">Games</td>{% for d in stats.activity.by_weekday %}<td>{{ d.games }}</td>{% endfor %}</tr>
+    <tr><td class="muted">Winrate</td>{% for d in stats.activity.by_weekday %}<td>{% if d.games %}{{ d.winrate }}%{% else %}—{% endif %}</td>{% endfor %}</tr>
+  </table>
+  {% if max_hour_games %}
+  <div class="chart hours">
+    {% for h in stats.activity.by_hour %}
+    <span class="hbar"><span class="b" style="height: {{ (h.games / max_hour_games * 40)|round(1) }}px; display:block;"></span><span class="hl">{% if h.hour % 6 == 0 %}{{ h.hour }}{% endif %}</span></span>
+    {% endfor %}
+    <div class="muted" style="font-size:10px;margin-top:4px;">Matches by hour (UTC)</div>
+  </div>
+  {% endif %}
 
   {% endif %}
   </div>
