@@ -12,6 +12,11 @@ def _empty():
         "economy": {"spent_avg": 0.0, "loadout_avg": 0.0},
         "abilities": {"grenade": 0, "ability1": 0, "ability2": 0, "ultimate": 0},
         "teammates": [],
+        "kast": 0.0,
+        "clutch_breakdown": {f"1v{i}": 0 for i in range(1, 6)},
+        "sides": {"attack": {"won": 0, "played": 0, "winrate": 0.0},
+                  "defense": {"won": 0, "played": 0, "winrate": 0.0}},
+        "playtime": {"total_hours": 0.0, "avg_minutes": 0.0},
         "matches": 0,
     }
 
@@ -26,6 +31,10 @@ def aggregate_details(details):
     first_bloods = opening_deaths = plants = defuses = clutches = 0
     spent_sum = loadout_sum = 0.0
     mates = {}  # puuid -> {name, games, wins}
+    kast_sum = rounds_sum = 0
+    clutch_bd = {f"1v{i}": 0 for i in range(1, 6)}
+    aw = ap = dw = dp = 0
+    glen_sum = glen_n = 0
 
     for d in details:
         for name, kills in (d.get("weapons") or {}).items():
@@ -42,6 +51,20 @@ def aggregate_details(details):
         clutches += d.get("clutches", 0)
         spent_sum += d.get("spent_avg", 0.0)
         loadout_sum += d.get("loadout_avg", 0.0)
+
+        kast_sum += d.get("kast_rounds", 0)
+        rounds_sum += d.get("rounds_played", 0)
+        for b, n in (d.get("clutch_breakdown") or {}).items():
+            if b in clutch_bd:
+                clutch_bd[b] += n
+        aw += d.get("attack_won", 0)
+        ap += d.get("attack_played", 0)
+        dw += d.get("defense_won", 0)
+        dp += d.get("defense_played", 0)
+        gl = d.get("game_length_ms", 0) or 0
+        if gl:
+            glen_sum += gl
+            glen_n += 1
 
         won = d.get("won")
         for tm in (d.get("teammates") or []):
@@ -79,5 +102,15 @@ def aggregate_details(details):
                     "loadout_avg": round(loadout_sum / n, 1)},
         "abilities": abilities,
         "teammates": teammates,
+        "kast": round(kast_sum / rounds_sum * 100, 1) if rounds_sum else 0.0,
+        "clutch_breakdown": clutch_bd,
+        "sides": {
+            "attack": {"won": aw, "played": ap,
+                       "winrate": round(aw / ap * 100, 1) if ap else 0.0},
+            "defense": {"won": dw, "played": dp,
+                        "winrate": round(dw / dp * 100, 1) if dp else 0.0},
+        },
+        "playtime": {"total_hours": round(glen_sum / 3_600_000, 1),
+                     "avg_minutes": round(glen_sum / glen_n / 60_000, 1) if glen_n else 0.0},
         "matches": n,
     }

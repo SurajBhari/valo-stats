@@ -4,7 +4,8 @@ import detail_stats
 
 
 def _detail(weapons, fb=0, mk=None, plants=0, defuses=0, clutches=0,
-            ac=None, spent=0.0, loadout=0.0, od=0, won=None, teammates=None):
+            ac=None, spent=0.0, loadout=0.0, od=0, won=None, teammates=None,
+            kast=0, rounds_played=0, clutch_bd=None, aw=0, ap=0, dw=0, dp=0, glen=0):
     return {
         "match_id": "x", "agent": "Jett",
         "weapons": weapons,
@@ -12,6 +13,11 @@ def _detail(weapons, fb=0, mk=None, plants=0, defuses=0, clutches=0,
         "opening_deaths": od,
         "multikills": mk or {"3k": 0, "4k": 0, "5k": 0},
         "plants": plants, "defuses": defuses, "clutches": clutches,
+        "clutch_breakdown": clutch_bd or {f"1v{i}": 0 for i in range(1, 6)},
+        "kast_rounds": kast, "rounds_played": rounds_played,
+        "attack_won": aw, "attack_played": ap,
+        "defense_won": dw, "defense_played": dp,
+        "game_length_ms": glen,
         "ability_casts": ac or {"grenade": 0, "ability1": 0, "ability2": 0, "ultimate": 0},
         "spent_avg": spent, "loadout_avg": loadout,
         "won": won, "teammates": teammates or [],
@@ -99,6 +105,45 @@ def test_teammates_aggregated_min_two_games():
 
 def test_teammates_empty():
     assert detail_stats.aggregate_details([])["teammates"] == []
+
+
+def test_kast_aggregated():
+    details = [_detail({}, kast=6, rounds_played=10),
+               _detail({}, kast=8, rounds_played=12)]
+    agg = detail_stats.aggregate_details(details)
+    assert agg["kast"] == round(14 / 22 * 100, 1)
+
+
+def test_clutch_breakdown_aggregated():
+    details = [
+        _detail({}, clutch_bd={"1v1": 1, "1v2": 2, "1v3": 0, "1v4": 0, "1v5": 0}),
+        _detail({}, clutch_bd={"1v1": 0, "1v2": 1, "1v3": 1, "1v4": 0, "1v5": 1}),
+    ]
+    bd = detail_stats.aggregate_details(details)["clutch_breakdown"]
+    assert bd == {"1v1": 1, "1v2": 3, "1v3": 1, "1v4": 0, "1v5": 1}
+
+
+def test_sides_aggregated():
+    details = [_detail({}, aw=5, ap=10, dw=4, dp=8),
+               _detail({}, aw=3, ap=6, dw=6, dp=12)]
+    sides = detail_stats.aggregate_details(details)["sides"]
+    assert sides["attack"] == {"won": 8, "played": 16, "winrate": 50.0}
+    assert sides["defense"] == {"won": 10, "played": 20, "winrate": 50.0}
+
+
+def test_playtime_aggregated():
+    details = [_detail({}, glen=1_800_000), _detail({}, glen=2_700_000)]  # 30m + 45m
+    pt = detail_stats.aggregate_details(details)["playtime"]
+    assert pt["total_hours"] == round(4_500_000 / 3_600_000, 1)   # 1.25 -> 1.2/1.3
+    assert pt["avg_minutes"] == round(4_500_000 / 2 / 60_000, 1)  # 37.5
+
+
+def test_advanced_empty_forms():
+    agg = detail_stats.aggregate_details([])
+    assert agg["kast"] == 0.0
+    assert agg["sides"]["attack"]["winrate"] == 0.0
+    assert agg["playtime"]["total_hours"] == 0.0
+    assert agg["clutch_breakdown"]["1v5"] == 0
 
 
 def test_abilities_summed():
