@@ -61,93 +61,63 @@ def run_job(job_id, name, tag, region, window_seconds, queue, client=None, now=N
         region = region or account.get("region") or region
 
         # ------------------------------------------------------------------
-        # PHASE 1 — scan history: collect all in-window match IDs
-        # ------------------------------------------------------------------
-        job["message"] = "Scanning history…"
-        in_window_ids = []
-        page_size = config.PAGE_SIZE
-        start_index = 0
-
-        while True:
-            page = client.get_match_history(puuid, region, start_index,
-                                            start_index + page_size, queue)
-            job["status"] = "running"
-            job["paused_seconds_left"] = 0
-            job["pages_fetched"] += 1
-
-            stop_scan = False
-            for entry in page:
-                if entry["timestamp"] < cutoff:
-                    stop_scan = True
-                    break
-                in_window_ids.append(entry["match_id"])
-
-            if stop_scan or len(page) < page_size:
-                break
-
-            start_index += page_size
-
-        job["total_matches"] = len(in_window_ids)
-
-        # ------------------------------------------------------------------
-        # PHASE 2 — fetch details: fetch only uncached in-window matches
+        # Single phase — stored-matches returns stats inline; newest-first.
         # ------------------------------------------------------------------
         existing = cache.load_matches(puuid)
         cached_ids = {m["id"] for m in existing}
         collected = list(existing)
 
-        total = len(in_window_ids)
-        skipped = 0
-        for i, match_id in enumerate(in_window_ids):
-            if match_id in cached_ids:
-                continue
+        page = 1
+        reached_cutoff = False
 
-            raw = client.get_match_details(match_id, region)
+        while True:
+            job["message"] = f"Fetching page {page}…"
+            res = client.get_stored_matches(puuid, region, page, config.PAGE_SIZE, queue)
             job["status"] = "running"
             job["paused_seconds_left"] = 0
-            if raw is None:
-                skipped += 1
-                continue
 
-            m = henrik.normalize_raw_match(raw, puuid)
-            if m is None:
-                skipped += 1
-                continue
+            if page == 1:
+                job["total_matches"] = res["total"]
 
-            collected.append(m)
+            batch = res["matches"]
+            if not batch:
+                break
 
-            # Update progress after each successful detail
-            in_window = [x for x in collected if x["timestamp"] >= cutoff]
-            matches_parsed = len(in_window)
-            job["matches_parsed"] = matches_parsed
-            job["progress_pct"] = round(min(matches_parsed / total, 1.0) * 100, 1) if total > 0 else 0.0
-            oldest = min((x["timestamp"] for x in in_window), default=now)
-            job["oldest_ts"] = oldest
-            elapsed = time.time() - started_wall
-            rate = matches_parsed / elapsed if elapsed > 0 else 0
-            remaining = total - matches_parsed
-            job["eta_seconds"] = int(remaining / rate) if rate > 0 else None
-            job["message"] = f"Fetching match {matches_parsed}/{total}…"
+            for m in batch:
+                if m["timestamp"] < cutoff:
+                    reached_cutoff = True
+                    break
+                if m["id"] not in cached_ids:
+                    collected.append(m)
+                    cached_ids.add(m["id"])
 
-            # Persist after every match
             cache.save_matches(puuid, collected)
 
-        # Final persist (covers cached-only runs where loop body never executed)
-        cache.save_matches(puuid, collected)
+            in_window = [m for m in collected if m["timestamp"] >= cutoff]
+            job["matches_parsed"] = len(in_window)
+            oldest = min((m["timestamp"] for m in in_window), default=now)
+            job["oldest_ts"] = oldest
+            covered = max(now - oldest, 0)
+            pct = min(covered / window_seconds, 1.0) * 100
+            job["progress_pct"] = round(pct, 1)
+            elapsed = time.time() - started_wall
+            if pct > 0:
+                job["eta_seconds"] = int(elapsed * (100 - pct) / pct)
 
-        # Final progress values
-        in_window = [x for x in collected if x["timestamp"] >= cutoff]
-        matches_parsed = len(in_window)
-        job["matches_parsed"] = matches_parsed
-        job["progress_pct"] = 100.0 if total > 0 else 0.0
-        job["oldest_ts"] = min((x["timestamp"] for x in in_window), default=now)
+            job["pages_fetched"] = page
+
+            if reached_cutoff or res["after"] == 0:
+                break
+
+            page += 1
+
+        # Final values
+        in_window = [m for m in collected if m["timestamp"] >= cutoff]
+        job["matches_parsed"] = len(in_window)
         job["eta_seconds"] = 0
-        job["skipped"] = skipped
+        job["skipped"] = 0
         job["status"] = "done"
-        if skipped > 0:
-            job["message"] = f"Done — {matches_parsed} matches ({skipped} unavailable)"
-        else:
-            job["message"] = f"Done — {matches_parsed} matches"
+        job["message"] = f"Done — {len(in_window)} matches"
 
     except Exception as e:  # noqa: BLE001 - surface any failure to the UI
         job["status"] = "error"
