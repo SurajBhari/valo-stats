@@ -52,6 +52,13 @@
   .lvl { display: inline-block; vertical-align: middle; position: relative; margin-left: 8px; }
   .lvl img { height: 26px; vertical-align: middle; }
   .icn { width: 20px; height: 20px; vertical-align: middle; margin-right: 6px; border-radius: 3px; }
+  .wpn { padding: 5px 0; border-bottom: 1px solid #23262f; font-size: 12px; }
+  .wpn img { height: 18px; width: auto; vertical-align: middle; margin-right: 8px; }
+  .wpn .wn { color: #d4d7e0; }
+  .wpn .wk { float: right; color: #8a90a2; }
+  .combat .ci { display: inline-block; width: 32%; text-align: center; padding: 8px 0; vertical-align: top; }
+  .combat .cv { display: block; font-size: 20px; font-weight: 700; color: #fff; }
+  .combat .cl { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #8a90a2; }
 </style></head><body>
 
   {% if player.card_img %}
@@ -148,6 +155,36 @@
       </table>
     </div>
   </div>
+
+  {% if dstats and dstats.matches %}
+  <h2>Arsenal &amp; Combat <span class="muted" style="font-size:11px;">· {{ dstats.matches }} matches detailed</span></h2>
+  <div class="row">
+    <div class="col col-left">
+      <div class="panel">
+        <div class="l" style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#8a90a2;margin-bottom:6px;">Top weapons</div>
+        {% for w in dstats.weapons[:8] %}
+        <div class="wpn">{% if weapon_icons[w.name] %}<img src="{{ weapon_icons[w.name] }}" alt="">{% endif %}<span class="wn">{{ w.name }}</span><span class="wk">{{ w.kills }} kills</span></div>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="col col-right">
+      <div class="panel">
+        <div class="combat">
+          <div class="ci"><span class="cv">{{ dstats.combat.first_bloods }}</span><span class="cl">First bloods</span></div>
+          <div class="ci"><span class="cv">{{ dstats.combat.clutches }}</span><span class="cl">Clutches</span></div>
+          <div class="ci"><span class="cv">{{ dstats.combat.aces }}</span><span class="cl">Aces (5K)</span></div>
+          <div class="ci"><span class="cv">{{ dstats.combat.multikills['3k'] }}/{{ dstats.combat.multikills['4k'] }}</span><span class="cl">3K / 4K</span></div>
+          <div class="ci"><span class="cv">{{ dstats.combat.plants }}</span><span class="cl">Plants</span></div>
+          <div class="ci"><span class="cv">{{ dstats.combat.defuses }}</span><span class="cl">Defuses</span></div>
+        </div>
+        <div class="muted" style="margin-top:10px;font-size:11px;">
+          Avg spend {{ dstats.economy.spent_avg }} · avg loadout {{ dstats.economy.loadout_avg }} ·
+          ability casts: {{ dstats.abilities.grenade }}/{{ dstats.abilities.ability1 }}/{{ dstats.abilities.ability2 }}/{{ dstats.abilities.ultimate }} (C/Q/E/X)
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 
   <h2>Insights</h2>
   <div class="panel">

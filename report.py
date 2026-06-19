@@ -6,6 +6,7 @@ import os
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 import assets
+import detail_stats
 import insights
 
 # WeasyPrint complains loudly to its logger/stderr when its native (GTK/Pango)
@@ -21,7 +22,7 @@ _env = Environment(
 )
 
 
-def render_html(stats, player):
+def render_html(stats, player, details=None):
     tips = insights.generate(stats)
     agent_icons = {a["name"]: assets.agent_icon(a["name"]) for a in stats.get("per_agent", [])}
     map_icons = {m["name"]: assets.map_icon(m["name"]) for m in stats.get("per_map", [])}
@@ -29,12 +30,20 @@ def render_html(stats, player):
     player["card_img"] = assets.card_image(player.get("card"))
     player["rank_img"] = assets.rank_icon(player.get("rank_icon_url"))
     player["border_img"] = assets.level_border(player.get("level"))
+
+    dstats = None
+    weapon_icons = {}
+    if details:
+        dstats = detail_stats.aggregate_details(details)
+        weapon_icons = {w["name"]: assets.weapon_icon(w["name"]) for w in dstats["weapons"]}
+
     return _env.get_template("report.html").render(
         stats=stats, player=player, tips=tips,
-        agent_icons=agent_icons, map_icons=map_icons)
+        agent_icons=agent_icons, map_icons=map_icons,
+        dstats=dstats, weapon_icons=weapon_icons)
 
 
-def render_pdf(stats, player):
+def render_pdf(stats, player, details=None):
     """Render the report to PDF bytes, or return None if WeasyPrint's native
     libraries are unavailable (caller then serves the HTML fallback)."""
     try:
@@ -45,7 +54,7 @@ def render_pdf(stats, player):
             from weasyprint import HTML
     except Exception:
         return None
-    html = render_html(stats, player)
+    html = render_html(stats, player, details)
     try:
         return HTML(string=html).write_pdf()
     except Exception:

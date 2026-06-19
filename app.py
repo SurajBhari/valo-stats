@@ -65,6 +65,9 @@ def pdf(job_id):
     if cutoff_ts is not None:
         matches = [m for m in matches if m["timestamp"] >= cutoff_ts]
     agg = stats.aggregate(matches)
+    in_window_ids = {m["id"] for m in matches}
+    detail_map = cache.load_details(job["puuid"])
+    details = [v for k, v in detail_map.items() if k in in_window_ids]
     player = {"name": request.args.get("name", ""),
               "tag": request.args.get("tag", ""),
               "region": request.args.get("region", "")}
@@ -82,9 +85,9 @@ def pdf(job_id):
             player["rr"] = mmr["rr"]
     except Exception:
         pass
-    data = report.render_pdf(agg, player)
+    data = report.render_pdf(agg, player, details)
     if data is None:
-        html = report.render_html(agg, player)
+        html = report.render_html(agg, player, details)
         return Response(html, mimetype="text/html")
     safe_name = re.sub(r"[^A-Za-z0-9_-]", "_", player["name"]) or "player"
     return Response(data, mimetype="application/pdf",

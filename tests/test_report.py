@@ -19,6 +19,18 @@ def _no_network(monkeypatch):
     monkeypatch.setattr(assets, "card_image", lambda uuid: None)
     monkeypatch.setattr(assets, "rank_icon", lambda url: None)
     monkeypatch.setattr(assets, "level_border", lambda level: None)
+    monkeypatch.setattr(assets, "weapon_icon", lambda name: None)
+
+
+def _details():
+    return [{
+        "match_id": "m1", "agent": "Jett",
+        "weapons": {"Vandal": 12, "Classic": 4},
+        "first_bloods": 3, "multikills": {"3k": 2, "4k": 1, "5k": 1},
+        "plants": 2, "defuses": 1, "clutches": 1,
+        "ability_casts": {"grenade": 5, "ability1": 8, "ability2": 9, "ultimate": 2},
+        "spent_avg": 2500.0, "loadout_avg": 3600.0,
+    }]
 
 
 def _match(ts, won, agent="Jett", map_="Ascent", head=10, body=20, leg=5):
@@ -90,3 +102,23 @@ def test_icons_rendered_when_assets_available(monkeypatch):
 def test_no_icons_when_assets_unavailable():
     html = report.render_html(_populated_agg(), dict(_player(), card="x"))
     assert "<img" not in html  # all asset helpers return None -> no images
+
+
+def test_arsenal_section_present_with_details(monkeypatch):
+    monkeypatch.setattr(assets, "weapon_icon", lambda name: "data:image/png;base64,WPN")
+    html = report.render_html(_populated_agg(), _player(), details=_details())
+    assert "Arsenal" in html
+    assert "Vandal" in html
+    assert "First bloods" in html
+    assert "Clutches" in html
+    assert "data:image/png;base64,WPN" in html  # weapon icon
+
+
+def test_arsenal_section_absent_without_details():
+    html = report.render_html(_populated_agg(), _player())
+    assert "Arsenal" not in html
+
+
+def test_render_pdf_with_details_bytes_or_none():
+    result = report.render_pdf(_populated_agg(), _player(), details=_details())
+    assert result is None or isinstance(result, bytes)

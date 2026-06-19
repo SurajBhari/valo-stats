@@ -148,6 +148,10 @@ function handleEvent(data) {
   const msg         = data.message         || "";
   const err         = data.error           || null;
   const pauseSec    = data.paused_seconds_left ?? 0;
+  const phase       = data.phase           || "history";
+  const dFetched    = data.details_fetched ?? 0;
+  const dTotal      = data.details_total   ?? 0;
+  const inDetails   = phase === "details" && dTotal > 0;
 
   /* -- stats counters -- */
   statMatches.textContent = total > 0 ? `${matches} / ${total}` : matches;
@@ -160,6 +164,11 @@ function handleEvent(data) {
     progressBar.className   = "progress-bar-fill done";
     progressPct.textContent = "100%";
     progressPct.className   = "progress-pct done-pct";
+  } else if (inDetails) {
+    // Phase 2: bar reflects per-match detail progress
+    const pct2 = Math.min((dFetched / dTotal) * 100, 99);
+    progressBar.style.width = `${pct2}%`;
+    progressPct.textContent = `${Math.round(pct2)}%`;
   } else {
     progressBar.style.width = `${Math.min(pct, 99)}%`;   // never show 100% until done
     progressPct.textContent = `${Math.round(pct)}%`;
@@ -185,13 +194,14 @@ function handleEvent(data) {
   if (msg) messageText.textContent = msg;
 
   /* -- nav bar -- */
-  if (status === "running") navStatus.textContent = `${matches} matches fetched`;
+  if (status === "running") navStatus.textContent = inDetails ? `Details ${dFetched}/${dTotal}` : `${matches} matches fetched`;
   if (status === "paused")  navStatus.textContent = `Paused - ${pauseSec}s`;
   if (status === "done")    navStatus.textContent = "Done";
   if (status === "error")   navStatus.textContent = "Error";
 
   /* -- meta line under name -- */
   jobPlayerMeta.textContent = (function() {
+    if (status === "running" && inDetails) return `Loading match details ${dFetched}/${dTotal}`;
     if (status === "running") return `Fetching page ${pages}... ${matches} matches so far`;
     if (status === "paused")  return `Rate limited - resuming in ${pauseSec}s`;
     if (status === "done")    return `${matches} matches parsed across ${pages} pages`;

@@ -23,6 +23,7 @@ def _isolate(tmp_path, monkeypatch):
     monkeypatch.setattr(assets, "_ASSET_DIR", str(tmp_path / "assets"))
     monkeypatch.setattr(assets, "_agents", None)
     monkeypatch.setattr(assets, "_maps", None)
+    monkeypatch.setattr(assets, "_weapons", None)
     monkeypatch.setattr(assets, "_borders", None)
 
 
@@ -104,6 +105,15 @@ def test_agent_icon_unknown_name_returns_none(monkeypatch):
                         lambda url, timeout=20: _Resp(status_code=200, content=b"IMG"))
     assert assets.agent_icon("Jett") == assets._to_data_uri(b"IMG")
     assert assets.agent_icon("NotAnAgent") is None
+
+
+def test_weapon_icon_lookup(monkeypatch):
+    monkeypatch.setattr(assets, "_get_json",
+                        lambda url: {"data": [{"displayName": "Vandal", "displayIcon": "http://v"}]})
+    monkeypatch.setattr(assets.requests, "get",
+                        lambda url, timeout=20: _Resp(status_code=200, content=b"WIMG"))
+    assert assets.weapon_icon("Vandal") == assets._to_data_uri(b"WIMG")
+    assert assets.weapon_icon("Knife") is None
 
 
 def test_card_image_none_when_endpoint_fails(monkeypatch):

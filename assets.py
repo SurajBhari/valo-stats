@@ -20,6 +20,7 @@ _ASSET_DIR = os.path.join(config.CACHE_DIR, "assets")
 # In-memory name->url maps (lazy-loaded once per process).
 _agents = None
 _maps = None
+_weapons = None
 _borders = None
 
 
@@ -96,6 +97,13 @@ def map_icon(name):
     if _maps is None:
         _maps = _name_map("maps")
     return _data_uri(_maps.get(name))
+
+
+def weapon_icon(name):
+    global _weapons
+    if _weapons is None:
+        _weapons = _name_map("weapons")
+    return _data_uri(_weapons.get(name))
 
 
 def card_image(uuid):
