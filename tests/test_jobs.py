@@ -1,5 +1,6 @@
 """Tests for jobs.py — SR2: single-phase stored-matches worker (inline stats)."""
 import cache as cache_module
+import henrik
 import jobs
 
 
@@ -45,6 +46,8 @@ class _FakeClient:
         self.pages = pages
         self.on_pause = None
         self.stored_calls = []   # [(puuid, region, page, size, mode), ...]
+        self.detail_calls = []   # [(match_id, region), ...]
+        self.detail_errors = set()  # match_ids that should raise HenrikError
 
     def get_account(self, name, tag):
         return {"puuid": "puuid-test", "region": "na", "level": 100}
@@ -55,6 +58,12 @@ class _FakeClient:
         if idx < len(self.pages):
             return dict(self.pages[idx])
         return {"matches": [], "total": 0, "after": 0}
+
+    def get_match_detail(self, match_id, region):
+        self.detail_calls.append((match_id, region))
+        if match_id in self.detail_errors:
+            raise henrik.HenrikError(f"boom {match_id}")
+        return {"metadata": {"match_id": match_id}, "players": [], "rounds": [], "kills": []}
 
 
 # ---------------------------------------------------------------------------
@@ -539,6 +548,81 @@ def test_create_job_has_total_matches_key():
     job = jobs.get_job(jid)
     assert "total_matches" in job
     assert job["total_matches"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — per-match details
+# ---------------------------------------------------------------------------
+
+def test_phase2_fetches_details_for_in_window(tmp_path, monkeypatch):
+    """After Phase 1, details are fetched for each in-window match and cached."""
+    monkeypatch.setattr(jobs.config, "CACHE_DIR", str(tmp_path))
+    monkeypatch.setattr(jobs.config, "PAGE_SIZE", PAGE_SIZE)
+
+    now = 1_000_000_000.0
+    window = 86_400
+    pages = [{"matches": [_norm_match("m1", now - 100), _norm_match("m2", now - 200)],
+              "total": 2, "after": 0}]
+    client = _FakeClient(pages)
+
+    jid = jobs.create_job()
+    jobs.run_job(jid, "n", "t", "na", window, queue="competitive", client=client, now=now)
+
+    job = jobs.get_job(jid)
+    assert job["status"] == "done"
+    assert job["phase"] == "details"
+    assert job["details_total"] == 2
+    assert job["details_fetched"] == 2
+    assert job["details_skipped"] == 0
+    assert sorted(client.detail_calls) == [("m1", "na"), ("m2", "na")]
+    # cached, keyed by match id
+    cached = cache_module.load_details("puuid-test")
+    assert set(cached.keys()) == {"m1", "m2"}
+
+
+def test_phase2_skips_already_cached(tmp_path, monkeypatch):
+    """Details already in the cache are not re-fetched."""
+    monkeypatch.setattr(jobs.config, "CACHE_DIR", str(tmp_path))
+    monkeypatch.setattr(jobs.config, "PAGE_SIZE", PAGE_SIZE)
+
+    now = 1_000_000_000.0
+    window = 86_400
+    cache_module.save_details("puuid-test", {"m1": {"agent": "Jett"}})
+    pages = [{"matches": [_norm_match("m1", now - 100), _norm_match("m2", now - 200)],
+              "total": 2, "after": 0}]
+    client = _FakeClient(pages)
+
+    jid = jobs.create_job()
+    jobs.run_job(jid, "n", "t", "na", window, queue=None, client=client, now=now)
+
+    job = jobs.get_job(jid)
+    # only m2 fetched; m1 already cached
+    assert client.detail_calls == [("m2", "na")]
+    assert job["details_fetched"] == 2  # 1 pre-cached + 1 newly fetched
+    assert job["details_total"] == 2
+
+
+def test_phase2_per_match_error_increments_skipped(tmp_path, monkeypatch):
+    """A HenrikError on one match is skipped, not fatal; job still done."""
+    monkeypatch.setattr(jobs.config, "CACHE_DIR", str(tmp_path))
+    monkeypatch.setattr(jobs.config, "PAGE_SIZE", PAGE_SIZE)
+
+    now = 1_000_000_000.0
+    window = 86_400
+    pages = [{"matches": [_norm_match("m1", now - 100), _norm_match("bad", now - 200)],
+              "total": 2, "after": 0}]
+    client = _FakeClient(pages)
+    client.detail_errors = {"bad"}
+
+    jid = jobs.create_job()
+    jobs.run_job(jid, "n", "t", "na", window, queue=None, client=client, now=now)
+
+    job = jobs.get_job(jid)
+    assert job["status"] == "done"
+    assert job["details_fetched"] == 1
+    assert job["details_skipped"] == 1
+    cached = cache_module.load_details("puuid-test")
+    assert "m1" in cached and "bad" not in cached
 
 
 def test_evict_old_done_jobs(monkeypatch):

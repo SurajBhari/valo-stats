@@ -5,6 +5,7 @@ import uuid
 import cache
 import config
 import henrik
+import match_detail
 
 JOBS = {}
 _LOCK = threading.Lock()
@@ -28,6 +29,8 @@ def create_job():
             "paused_seconds_left": 0, "message": "Starting…",
             "puuid": None, "error": None, "cutoff_ts": None,
             "total_matches": 0, "skipped": 0,
+            "phase": "history", "details_total": 0,
+            "details_fetched": 0, "details_skipped": 0,
             "created_at": now_ts,
         }
     return job_id
@@ -111,11 +114,39 @@ def run_job(job_id, name, tag, region, window_seconds, queue, client=None, now=N
 
             page += 1
 
-        # Final values
+        # Phase 1 final
         in_window = [m for m in collected if m["timestamp"] >= cutoff]
         job["matches_parsed"] = len(in_window)
-        job["eta_seconds"] = 0
         job["skipped"] = 0
+
+        # ------------------------------------------------------------------
+        # Phase 2 — per-match details (weapons/combat/economy), cached by id.
+        # Additive: a per-match fetch failure is skipped, never fatal.
+        # ------------------------------------------------------------------
+        job["phase"] = "details"
+        detail_cache = cache.load_details(puuid)
+        in_window_ids = [m["id"] for m in in_window]
+        job["details_total"] = len(in_window_ids)
+        job["details_fetched"] = sum(1 for mid in in_window_ids if mid in detail_cache)
+        job["details_skipped"] = 0
+
+        for mid in in_window_ids:
+            if mid in detail_cache:
+                continue
+            try:
+                raw = client.get_match_detail(mid, region)
+                detail_cache[mid] = match_detail.extract_detail(raw, puuid)
+                cache.save_details(puuid, detail_cache)
+                job["details_fetched"] += 1
+            except henrik.HenrikError:
+                job["details_skipped"] += 1
+            job["status"] = "running"
+            job["paused_seconds_left"] = 0
+            done_count = job["details_fetched"] + job["details_skipped"]
+            job["message"] = f"Loading match details {done_count}/{job['details_total']}"
+
+        # Final values
+        job["eta_seconds"] = 0
         job["status"] = "done"
         job["message"] = f"Done — {len(in_window)} matches"
 
