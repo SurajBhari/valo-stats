@@ -7,6 +7,11 @@ No I/O — unit-testable in isolation.
 
 from collections import defaultdict
 
+# Bump when extract_detail's output schema changes so the worker re-fetches and
+# re-extracts stale cached records (matches are immutable but our parsing isn't).
+# v2 added: opening_deaths, won, teammates.
+SCHEMA_VERSION = 2
+
 
 def _puuid(side):
     return (side or {}).get("puuid")
@@ -80,6 +85,7 @@ def extract_detail(data, puuid):
                  if my_team and p.get("team_id") == my_team and p.get("puuid") != puuid]
 
     return {
+        "v": SCHEMA_VERSION,
         "match_id": meta.get("match_id"),
         "agent": agent,
         "weapons": dict(weapons),

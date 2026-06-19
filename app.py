@@ -56,7 +56,7 @@ def stream(job_id):
 
 
 def _load_report_context(job_id):
-    """Return (agg, details, player) for a completed job, or None if not ready.
+    """Return (agg, details, player, matches) for a completed job, or None if not ready.
 
     Loads window-filtered matches + cached details and best-effort enriches the
     player with profile artwork (card, level, rank). Profile fetch never blocks.
@@ -88,7 +88,7 @@ def _load_report_context(job_id):
             player["rr"] = mmr["rr"]
     except Exception:
         pass
-    return agg, details, player
+    return agg, details, player, matches
 
 
 @app.route("/api/report/<job_id>/dashboard")
@@ -96,8 +96,8 @@ def dashboard(job_id):
     ctx = _load_report_context(job_id)
     if ctx is None:
         return jsonify({"error": "job not ready"}), 400
-    agg, details, player = ctx
-    data = report.build_report_data(agg, player, details)
+    agg, details, player, matches = ctx
+    data = report.build_report_data(agg, player, details, matches)
     return render_template("dashboard.html", data=data, job_id=job_id)
 
 
@@ -106,7 +106,7 @@ def pdf(job_id):
     ctx = _load_report_context(job_id)
     if ctx is None:
         return jsonify({"error": "job not ready"}), 400
-    agg, details, player = ctx
+    agg, details, player, _matches = ctx
     data = report.render_pdf(agg, player, details)
     if data is None:
         html = report.render_html(agg, player, details)

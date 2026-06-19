@@ -49,11 +49,17 @@ def render_html(stats, player, details=None):
         trend_pts=trend_pts, max_hour_games=max_hour_games)
 
 
-def build_report_data(stats, player, details=None):
+def build_report_data(stats, player, details=None, matches=None):
     """Assemble a JSON-serializable payload for the interactive web dashboard.
 
     Image references are raw CDN URLs (the browser fetches them), not base64.
+    `match_samples` carries [timestamp, won] per match so the browser can bucket
+    activity by the viewer's local timezone (won: 1=win, 0=loss, null=draw).
     """
+    match_samples = [
+        [m["timestamp"], (1 if m["won"] is True else (0 if m["won"] is False else None))]
+        for m in (matches or [])
+    ]
     detail = None
     if details:
         d = detail_stats.aggregate_details(details)
@@ -82,6 +88,7 @@ def build_report_data(stats, player, details=None):
             "leg": stats.get("weapons", {}).get("leg", 0),
         },
         "activity": stats.get("activity", {"by_weekday": [], "by_hour": []}),
+        "match_samples": match_samples,
         "streaks": stats.get("streaks", {}),
         "days": stats.get("days", {}),
         "tips": [t["text"] for t in insights.generate(stats)],

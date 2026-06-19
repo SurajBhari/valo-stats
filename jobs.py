@@ -125,13 +125,18 @@ def run_job(job_id, name, tag, region, window_seconds, queue, client=None, now=N
         # ------------------------------------------------------------------
         job["phase"] = "details"
         detail_cache = cache.load_details(puuid)
+
+        def _fresh(mid):
+            rec = detail_cache.get(mid)
+            return rec is not None and rec.get("v", 0) >= match_detail.SCHEMA_VERSION
+
         in_window_ids = [m["id"] for m in in_window]
         job["details_total"] = len(in_window_ids)
-        job["details_fetched"] = sum(1 for mid in in_window_ids if mid in detail_cache)
+        job["details_fetched"] = sum(1 for mid in in_window_ids if _fresh(mid))
         job["details_skipped"] = 0
 
         for mid in in_window_ids:
-            if mid in detail_cache:
+            if _fresh(mid):
                 continue
             try:
                 raw = client.get_match_detail(mid, region)

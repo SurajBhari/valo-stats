@@ -2,6 +2,7 @@
 import cache as cache_module
 import henrik
 import jobs
+import match_detail
 
 
 # ---------------------------------------------------------------------------
@@ -587,7 +588,8 @@ def test_phase2_skips_already_cached(tmp_path, monkeypatch):
 
     now = 1_000_000_000.0
     window = 86_400
-    cache_module.save_details("puuid-test", {"m1": {"agent": "Jett"}})
+    cache_module.save_details("puuid-test",
+                              {"m1": {"agent": "Jett", "v": match_detail.SCHEMA_VERSION}})
     pages = [{"matches": [_norm_match("m1", now - 100), _norm_match("m2", now - 200)],
               "total": 2, "after": 0}]
     client = _FakeClient(pages)
@@ -600,6 +602,33 @@ def test_phase2_skips_already_cached(tmp_path, monkeypatch):
     assert client.detail_calls == [("m2", "na")]
     assert job["details_fetched"] == 2  # 1 pre-cached + 1 newly fetched
     assert job["details_total"] == 2
+
+
+def test_phase2_refetches_stale_schema(tmp_path, monkeypatch):
+    """A cached detail with an old/missing schema version is re-fetched."""
+    monkeypatch.setattr(jobs.config, "CACHE_DIR", str(tmp_path))
+    monkeypatch.setattr(jobs.config, "PAGE_SIZE", PAGE_SIZE)
+
+    now = 1_000_000_000.0
+    window = 86_400
+    # m1 cached but stale (no version => v0); m2 cached and current
+    cache_module.save_details("puuid-test", {
+        "m1": {"agent": "Jett"},                              # stale
+        "m2": {"agent": "Sage", "v": match_detail.SCHEMA_VERSION},  # current
+    })
+    pages = [{"matches": [_norm_match("m1", now - 100), _norm_match("m2", now - 200)],
+              "total": 2, "after": 0}]
+    client = _FakeClient(pages)
+
+    jid = jobs.create_job()
+    jobs.run_job(jid, "n", "t", "na", window, queue=None, client=client, now=now)
+
+    job = jobs.get_job(jid)
+    # only the stale m1 is re-fetched; current m2 is skipped
+    assert client.detail_calls == [("m1", "na")]
+    cached = cache_module.load_details("puuid-test")
+    assert cached["m1"]["v"] == match_detail.SCHEMA_VERSION
+    assert job["details_fetched"] == 2
 
 
 def test_phase2_per_match_error_increments_skipped(tmp_path, monkeypatch):

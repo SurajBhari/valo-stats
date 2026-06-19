@@ -186,5 +186,14 @@ def test_build_report_data_no_details(monkeypatch):
     _stub_urls(monkeypatch)
     data = report.build_report_data(_populated_agg(), _player())
     assert data["detail"] is None
+    assert data["match_samples"] == []   # no matches passed
     import json
     json.dumps(data)
+
+
+def test_build_report_data_match_samples(monkeypatch):
+    _stub_urls(monkeypatch)
+    matches = [_match(1, True), _match(2, False), _match(3, None)]
+    data = report.build_report_data(stats.aggregate(matches), _player(), matches=matches)
+    # [timestamp, won-encoded] with won: 1=win, 0=loss, None=draw
+    assert data["match_samples"] == [[1.0, 1], [2.0, 0], [3.0, None]]

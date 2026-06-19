@@ -125,15 +125,47 @@ winrateBar("c-agents", DATA.per_agent, "name");
   });
 })();
 
-/* ── Activity by hour (matches) ──────────────────────────────── */
+/* ── Activity bucketed in the VIEWER'S LOCAL timezone ─────────────
+   Re-bucket raw match samples ([timestamp, won]) using the browser's local
+   time (JS Date getHours/getDay are local), so IST users see IST, etc. */
+function _winrate(w, g) { return g ? Math.round(w / g * 1000) / 10 : 0; }
+
+const LOCAL_ACT = (function () {
+  const samples = DATA.match_samples || [];
+  const hours = Array.from({ length: 24 }, () => ({ games: 0, wins: 0 }));
+  const days = Array.from({ length: 7 }, () => ({ games: 0, wins: 0 })); // 0=Sun (JS)
+  for (const s of samples) {
+    const d = new Date(s[0] * 1000);
+    const won = s[1] === 1;
+    const hb = hours[d.getHours()], db = days[d.getDay()];
+    hb.games++; db.games++;
+    if (won) { hb.wins++; db.wins++; }
+  }
+  // Reorder weekdays Mon..Sun for display
+  const order = [1, 2, 3, 4, 5, 6, 0];
+  const NAMES = { 0: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat" };
+  return {
+    hours,
+    weekday: order.map(i => ({ day: NAMES[i], games: days[i].games, wins: days[i].wins })),
+  };
+})();
+
+const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || "local time";
+
+/* ── Activity by hour (local) ────────────────────────────────── */
 (function () {
-  const h = (DATA.activity && DATA.activity.by_hour) || [];
-  if (!h.length) return;
+  const h = LOCAL_ACT.hours;
+  // fall back to server UTC buckets if no raw samples were sent
+  const useServer = !(DATA.match_samples && DATA.match_samples.length);
+  const src = useServer ? ((DATA.activity && DATA.activity.by_hour) || []) : h;
+  if (!src.length) return;
+  const games = src.map(x => x.games);
+  const wins = src.map(x => x.wins != null ? x.wins : 0);
   mk("c-hours", {
     type: "bar",
     data: {
-      labels: h.map(x => String(x.hour).padStart(2, "0")),
-      datasets: [{ label: "Matches", data: h.map(x => x.games),
+      labels: src.map((_, i) => String(i).padStart(2, "0")),
+      datasets: [{ label: "Matches", data: games,
                    backgroundColor: RED_SOFT, borderColor: RED, borderWidth: 1 }],
     },
     options: {
@@ -141,23 +173,27 @@ winrateBar("c-agents", DATA.per_agent, "name");
       plugins: {
         legend: { display: false },
         tooltip: { callbacks: { label: (ctx) => {
-          const d = h[ctx.dataIndex];
-          return `${d.games} matches · ${d.winrate}% WR`;
+          const g = games[ctx.dataIndex];
+          return `${g} matches · ${_winrate(wins[ctx.dataIndex], g)}% WR`;
         } } },
       },
     },
   });
+  const cap = document.getElementById("hours-cap");
+  if (cap) cap.textContent = useServer ? "Matches by hour (UTC)" : `Matches by hour (${TZ})`;
 })();
 
-/* ── Winrate by weekday ──────────────────────────────────────── */
+/* ── Winrate by weekday (local) ──────────────────────────────── */
 (function () {
-  const wd = (DATA.activity && DATA.activity.by_weekday) || [];
+  const useServer = !(DATA.match_samples && DATA.match_samples.length);
+  const wd = useServer ? ((DATA.activity && DATA.activity.by_weekday) || []) : LOCAL_ACT.weekday;
   if (!wd.length) return;
+  const rates = wd.map(x => x.winrate != null ? x.winrate : _winrate(x.wins, x.games));
   mk("c-weekday", {
     type: "bar",
     data: {
       labels: wd.map(x => x.day),
-      datasets: [{ label: "Winrate %", data: wd.map(x => x.winrate),
+      datasets: [{ label: "Winrate %", data: rates,
                    backgroundColor: RED_SOFT, borderColor: RED, borderWidth: 1, games: wd.map(x => x.games) }],
     },
     options: {
