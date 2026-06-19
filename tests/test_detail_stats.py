@@ -5,7 +5,8 @@ import detail_stats
 
 def _detail(weapons, fb=0, mk=None, plants=0, defuses=0, clutches=0,
             ac=None, spent=0.0, loadout=0.0, od=0, won=None, teammates=None,
-            kast=0, rounds_played=0, clutch_bd=None, aw=0, ap=0, dw=0, dp=0, glen=0):
+            kast=0, rounds_played=0, clutch_bd=None, aw=0, ap=0, dw=0, dp=0, glen=0,
+            survival=0, flawless=0, trade_kills=0, traded_deaths=0):
     return {
         "match_id": "x", "agent": "Jett",
         "weapons": weapons,
@@ -18,6 +19,8 @@ def _detail(weapons, fb=0, mk=None, plants=0, defuses=0, clutches=0,
         "attack_won": aw, "attack_played": ap,
         "defense_won": dw, "defense_played": dp,
         "game_length_ms": glen,
+        "survival_rounds": survival, "flawless_rounds": flawless,
+        "trade_kills": trade_kills, "traded_deaths": traded_deaths,
         "ability_casts": ac or {"grenade": 0, "ability1": 0, "ability2": 0, "ultimate": 0},
         "spent_avg": spent, "loadout_avg": loadout,
         "won": won, "teammates": teammates or [],
@@ -144,6 +147,20 @@ def test_advanced_empty_forms():
     assert agg["sides"]["attack"]["winrate"] == 0.0
     assert agg["playtime"]["total_hours"] == 0.0
     assert agg["clutch_breakdown"]["1v5"] == 0
+    assert agg["combat"]["survival_pct"] == 0.0
+    assert agg["combat"]["flawless"] == 0
+
+
+def test_survival_flawless_trades_aggregated():
+    details = [
+        _detail({}, rounds_played=20, survival=12, flawless=3, trade_kills=5, traded_deaths=4),
+        _detail({}, rounds_played=20, survival=14, flawless=2, trade_kills=3, traded_deaths=6),
+    ]
+    c = detail_stats.aggregate_details(details)["combat"]
+    assert c["survival_pct"] == round(26 / 40 * 100, 1)
+    assert c["flawless"] == 5
+    assert c["trade_kills"] == 8
+    assert c["traded_deaths"] == 10
 
 
 def test_abilities_summed():

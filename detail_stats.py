@@ -8,7 +8,8 @@ def _empty():
         "weapons": [],
         "combat": {"first_bloods": 0, "multikills": {"3k": 0, "4k": 0, "5k": 0},
                    "aces": 0, "plants": 0, "defuses": 0, "clutches": 0,
-                   "opening_kills": 0, "opening_deaths": 0, "opening_winrate": 0.0},
+                   "opening_kills": 0, "opening_deaths": 0, "opening_winrate": 0.0,
+                   "survival_pct": 0.0, "flawless": 0, "trade_kills": 0, "traded_deaths": 0},
         "economy": {"spent_avg": 0.0, "loadout_avg": 0.0},
         "abilities": {"grenade": 0, "ability1": 0, "ability2": 0, "ultimate": 0},
         "teammates": [],
@@ -35,6 +36,7 @@ def aggregate_details(details):
     clutch_bd = {f"1v{i}": 0 for i in range(1, 6)}
     aw = ap = dw = dp = 0
     glen_sum = glen_n = 0
+    survival_sum = flawless_sum = trade_kills_sum = traded_deaths_sum = 0
 
     for d in details:
         for name, kills in (d.get("weapons") or {}).items():
@@ -65,6 +67,10 @@ def aggregate_details(details):
         if gl:
             glen_sum += gl
             glen_n += 1
+        survival_sum += d.get("survival_rounds", 0)
+        flawless_sum += d.get("flawless_rounds", 0)
+        trade_kills_sum += d.get("trade_kills", 0)
+        traded_deaths_sum += d.get("traded_deaths", 0)
 
         won = d.get("won")
         for tm in (d.get("teammates") or []):
@@ -97,7 +103,10 @@ def aggregate_details(details):
         "combat": {"first_bloods": first_bloods, "multikills": mk,
                    "aces": mk["5k"], "plants": plants, "defuses": defuses,
                    "clutches": clutches, "opening_kills": first_bloods,
-                   "opening_deaths": opening_deaths, "opening_winrate": opening_winrate},
+                   "opening_deaths": opening_deaths, "opening_winrate": opening_winrate,
+                   "survival_pct": round(survival_sum / rounds_sum * 100, 1) if rounds_sum else 0.0,
+                   "flawless": flawless_sum, "trade_kills": trade_kills_sum,
+                   "traded_deaths": traded_deaths_sum},
         "economy": {"spent_avg": round(spent_sum / n, 1),
                     "loadout_avg": round(loadout_sum / n, 1)},
         "abilities": abilities,
