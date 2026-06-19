@@ -73,7 +73,7 @@
           <label class="field-label" for="input-region">Region</label>
           <select class="select" id="input-region" name="region">
             {% for r in regions %}
-            <option value="{{ r }}">{{ r | upper }}</option>
+            <option value="{{ r }}"{% if r == 'ap' %} selected{% endif %}>{{ r | upper }}</option>
             {% endfor %}
           </select>
         </div>
