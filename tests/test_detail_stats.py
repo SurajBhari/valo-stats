@@ -4,15 +4,17 @@ import detail_stats
 
 
 def _detail(weapons, fb=0, mk=None, plants=0, defuses=0, clutches=0,
-            ac=None, spent=0.0, loadout=0.0):
+            ac=None, spent=0.0, loadout=0.0, od=0, won=None, teammates=None):
     return {
         "match_id": "x", "agent": "Jett",
         "weapons": weapons,
         "first_bloods": fb,
+        "opening_deaths": od,
         "multikills": mk or {"3k": 0, "4k": 0, "5k": 0},
         "plants": plants, "defuses": defuses, "clutches": clutches,
         "ability_casts": ac or {"grenade": 0, "ability1": 0, "ability2": 0, "ultimate": 0},
         "spent_avg": spent, "loadout_avg": loadout,
+        "won": won, "teammates": teammates or [],
     }
 
 
@@ -60,6 +62,43 @@ def test_economy_is_mean_across_matches():
     agg = detail_stats.aggregate_details(details)
     assert agg["economy"]["spent_avg"] == 2500.0
     assert agg["economy"]["loadout_avg"] == 4000.0
+
+
+def test_opening_duels():
+    details = [_detail({}, fb=6, od=4), _detail({}, fb=4, od=6)]
+    agg = detail_stats.aggregate_details(details)
+    c = agg["combat"]
+    assert c["opening_kills"] == 10
+    assert c["opening_deaths"] == 10
+    assert c["opening_winrate"] == 50.0
+
+
+def test_opening_winrate_zero_when_no_duels():
+    agg = detail_stats.aggregate_details([_detail({})])
+    assert agg["combat"]["opening_winrate"] == 0.0
+
+
+def test_teammates_aggregated_min_two_games():
+    M1 = {"puuid": "p1", "name": "Alpha"}
+    M2 = {"puuid": "p2", "name": "Bravo"}
+    details = [
+        _detail({}, won=True, teammates=[M1, M2]),
+        _detail({}, won=False, teammates=[M1]),       # p1 now 2 games, 1 win
+        _detail({}, won=True, teammates=[M2]),         # p2 now 2 games, 2 wins
+        _detail({}, won=True, teammates=[{"puuid": "p3", "name": "Solo"}]),  # 1 game -> excluded
+    ]
+    agg = detail_stats.aggregate_details(details)
+    mates = {m["name"]: m for m in agg["teammates"]}
+    assert "Solo" not in mates  # < 2 games
+    assert mates["Alpha"]["games"] == 2 and mates["Alpha"]["wins"] == 1 and mates["Alpha"]["winrate"] == 50.0
+    assert mates["Bravo"]["games"] == 2 and mates["Bravo"]["wins"] == 2 and mates["Bravo"]["winrate"] == 100.0
+    # sorted by games desc (both have 2; order stable/deterministic)
+    assert all(agg["teammates"][i]["games"] >= agg["teammates"][i + 1]["games"]
+               for i in range(len(agg["teammates"]) - 1))
+
+
+def test_teammates_empty():
+    assert detail_stats.aggregate_details([])["teammates"] == []
 
 
 def test_abilities_summed():
