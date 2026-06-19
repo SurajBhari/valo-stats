@@ -12,6 +12,7 @@ const inputName  = document.getElementById("input-name");
 const inputTag   = document.getElementById("input-tag");
 const inputRegion= document.getElementById("input-region");
 const inputWindow= document.getElementById("input-window");
+const inputMode  = document.getElementById("input-mode");
 const btnSubmit  = document.getElementById("btn-submit");
 const errNameTag = document.getElementById("error-name-tag");
 const errApi     = document.getElementById("error-api");
@@ -137,18 +138,19 @@ function clearPaused() {
 
 /* ── SSE event handler ───────────────────────────────────── */
 function handleEvent(data) {
-  const status   = data.status;
-  const matches  = data.matches_parsed  ?? 0;
-  const pages    = data.pages_fetched   ?? 0;
-  const oldestTs = data.oldest_ts       ?? null;
-  const pct      = data.progress_pct   ?? 0;
-  const eta      = data.eta_seconds     ?? null;
-  const msg      = data.message         || "";
-  const err      = data.error           || null;
-  const pauseSec = data.paused_seconds_left ?? 0;
+  const status      = data.status;
+  const matches     = data.matches_parsed  ?? 0;
+  const total       = data.total_matches   ?? 0;
+  const pages       = data.pages_fetched   ?? 0;
+  const oldestTs    = data.oldest_ts       ?? null;
+  const pct         = data.progress_pct   ?? 0;
+  const eta         = data.eta_seconds     ?? null;
+  const msg         = data.message         || "";
+  const err         = data.error           || null;
+  const pauseSec    = data.paused_seconds_left ?? 0;
 
   /* -- stats counters -- */
-  statMatches.textContent = matches;
+  statMatches.textContent = total > 0 ? `${matches} / ${total}` : matches;
   statPages.textContent   = pages;
   statOldest.textContent  = fmtDate(oldestTs);
 
@@ -223,7 +225,7 @@ function handleEvent(data) {
 }
 
 /* ── Start job + open SSE stream ─────────────────────────── */
-async function startReport(name, tag, region, window) {
+async function startReport(name, tag, region, window, mode) {
   btnSubmit.disabled = true;
   btnSubmit.textContent = "Starting...";
   errApi.style.display = "none";
@@ -233,7 +235,7 @@ async function startReport(name, tag, region, window) {
     const res = await fetch("/api/report/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, tag, region, window }),
+      body: JSON.stringify({ name, tag, region, window, mode }),
     });
     const json = await res.json();
     if (!res.ok) {
@@ -254,7 +256,7 @@ async function startReport(name, tag, region, window) {
   }
 
   /* Job started — show the panel */
-  currentJob = { name, tag, region, window, job_id: jobId };
+  currentJob = { name, tag, region, window, mode, job_id: jobId };
   footerJobId.textContent = `job ${jobId.slice(0, 8)}`;
 
   // Set player name immediately — use DOM methods, no innerHTML
@@ -318,6 +320,7 @@ form.addEventListener("submit", function(e) {
   const tag    = sanitizeTag(rawTag);
   const region = inputRegion.value;
   const window = inputWindow.value;
+  const mode   = inputMode.value;
 
   if (!name || !tag) {
     errNameTag.classList.add("visible");
@@ -332,7 +335,7 @@ form.addEventListener("submit", function(e) {
     currentEs = null;
   }
 
-  startReport(name, tag, region, window);
+  startReport(name, tag, region, window, mode);
 });
 
 /* ── Reset button ────────────────────────────────────────── */

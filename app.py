@@ -29,9 +29,13 @@ def start():
     if window_key not in config.WINDOWS:
         window_key = config.DEFAULT_WINDOW
     window_seconds = config.WINDOWS[window_key]
+    mode = (body.get("mode") or "").strip()
+    if mode not in config.QUEUES:
+        mode = config.DEFAULT_QUEUE
+    queue = config.QUEUES[mode]
     if not name or not tag:
         return jsonify({"error": "name and tag required"}), 400
-    job_id = jobs.start_job(name, tag, region, window_seconds)
+    job_id = jobs.start_job(name, tag, region, window_seconds, queue)
     return jsonify({"job_id": job_id})
 
 

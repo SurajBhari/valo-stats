@@ -13,3 +13,6 @@ REGIONS = ["na", "eu", "ap", "kr", "latam", "br"]
 
 WINDOWS = {"1d": 86400, "1w": 604800, "1m": 2592000, "1y": 31536000}
 DEFAULT_WINDOW = "1m"
+
+QUEUES = {"competitive": "competitive", "unrated": "unrated", "all": None}
+DEFAULT_QUEUE = "competitive"
