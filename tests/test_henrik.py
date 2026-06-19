@@ -204,6 +204,26 @@ def test_get_match_history_parses_and_converts_ms_to_seconds(monkeypatch):
     assert result[1] == {"match_id": "mid-2", "timestamp": 1_699_900_000.0}
 
 
+def test_get_match_history_400_means_end_of_history(monkeypatch):
+    """Riot's match-history endpoint returns 400 when startIndex is past the
+    available history. Treat that as end-of-history (return []), NOT an error,
+    so the scan stops gracefully instead of crashing the job."""
+    c = henrik.HenrikClient(api_key="k")
+    monkeypatch.setattr(c, "_post", lambda body: _Resp(400, {}, {}))
+    assert c.get_match_history("puuid-x", "na", 50, 75, "competitive") == []
+
+
+def test_get_match_history_other_errors_still_raise(monkeypatch):
+    """Non-400 failures (e.g. 500) must still raise, not be swallowed."""
+    c = henrik.HenrikClient(api_key="k")
+    monkeypatch.setattr(c, "_post", lambda body: _Resp(500, {}, {}))
+    try:
+        c.get_match_history("puuid-x", "na", 0, 25, "competitive")
+        assert False, "expected HenrikError"
+    except henrik.HenrikError:
+        pass
+
+
 def test_get_match_history_queue_none_omits_filter(monkeypatch):
     """When queue is None, the queries string must NOT contain '&queue='."""
     captured_bodies = []

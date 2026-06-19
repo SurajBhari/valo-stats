@@ -147,6 +147,11 @@ class HenrikClient:
                     self.on_pause(wait)
                 time.sleep(wait)
                 continue
+            if resp.status_code == 400:
+                # Riot's match-history endpoint returns 400 once startIndex is
+                # past the available history (it only retains recent matches).
+                # Treat as end-of-history so the scan stops cleanly.
+                return []
             if resp.status_code != 200:
                 raise HenrikError(f"Match history fetch failed ({resp.status_code})")
             history = resp.json()["data"]["History"]
