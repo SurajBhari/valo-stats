@@ -23,7 +23,7 @@ _env = Environment(
 )
 
 
-def render_html(stats, player, details=None):
+def render_html(stats, player, details=None, matches=None):
     tips = insights.generate(stats)
     agent_icons = {a["name"]: assets.agent_icon(a["name"]) for a in stats.get("per_agent", [])}
     map_icons = {m["name"]: assets.map_icon(m["name"]) for m in stats.get("per_map", [])}
@@ -34,9 +34,16 @@ def render_html(stats, player, details=None):
 
     dstats = None
     weapon_icons = {}
+    detail_by_id = {dd.get("match_id"): dd for dd in (details or [])}
     if details:
         dstats = detail_stats.aggregate_details(details)
         weapon_icons = {w["name"]: assets.weapon_icon(w["name"]) for w in dstats["weapons"]}
+
+    per_role = _per_role(matches or [])
+    recent_matches = _recent_matches(matches or [], detail_by_id)
+    w = stats.get("weapons", {})
+    accuracy = {k: w.get(k, 0) for k in
+                ("head", "body", "leg", "head_pct", "body_pct", "leg_pct")}
 
     trends = stats.get("trends") or []
     trend_pts = charts.polyline_points([t["winrate"] for t in trends], 560, 90)
@@ -46,7 +53,8 @@ def render_html(stats, player, details=None):
         stats=stats, player=player, tips=tips,
         agent_icons=agent_icons, map_icons=map_icons,
         dstats=dstats, weapon_icons=weapon_icons,
-        trend_pts=trend_pts, max_hour_games=max_hour_games)
+        trend_pts=trend_pts, max_hour_games=max_hour_games,
+        per_role=per_role, recent_matches=recent_matches, accuracy=accuracy)
 
 
 def _per_role(matches):
@@ -160,7 +168,7 @@ def build_report_data(stats, player, details=None, matches=None):
     }
 
 
-def render_pdf(stats, player, details=None):
+def render_pdf(stats, player, details=None, matches=None):
     """Render the report to PDF bytes, or return None if WeasyPrint's native
     libraries are unavailable (caller then serves the HTML fallback)."""
     try:
@@ -171,7 +179,7 @@ def render_pdf(stats, player, details=None):
             from weasyprint import HTML
     except Exception:
         return None
-    html = render_html(stats, player, details)
+    html = render_html(stats, player, details, matches)
     try:
         return HTML(string=html).write_pdf()
     except Exception:

@@ -113,10 +113,10 @@ def pdf(job_id):
     ctx = _load_report_context(job_id)
     if ctx is None:
         return jsonify({"error": "job not ready"}), 400
-    agg, details, player, _matches = ctx
-    data = report.render_pdf(agg, player, details)
+    agg, details, player, matches = ctx
+    data = report.render_pdf(agg, player, details, matches)
     if data is None:
-        html = report.render_html(agg, player, details)
+        html = report.render_html(agg, player, details, matches)
         return Response(html, mimetype="text/html")
     safe_name = re.sub(r"[^A-Za-z0-9_-]", "_", player["name"]) or "player"
     return Response(data, mimetype="application/pdf",

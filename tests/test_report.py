@@ -143,6 +143,19 @@ def test_opening_duels_and_teammates_rendered():
     assert "Buddy" in html
 
 
+def test_pdf_html_has_tracker_sections(monkeypatch):
+    # roles need agent_role; stub so Jett→Duelist
+    monkeypatch.setattr(assets, "agent_role", lambda n: "Duelist")
+    player = dict(_player(), peak="Ascendant 3")
+    html = report.render_html(_populated_agg(), player, details=_details(),
+                              matches=_pop_matches())
+    assert "Role performance" in html
+    assert "Accuracy" in html
+    assert "Recent matches" in html
+    assert "KAST" in html
+    assert "Peak: Ascendant 3" in html or "Peak Ascendant 3" in html
+
+
 def test_activity_and_trend_sections_present():
     html = report.render_html(_populated_agg(), _player())
     assert "When you play" in html
