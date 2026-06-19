@@ -120,7 +120,10 @@ def pdf(job_id):
 if __name__ == "__main__":
     # Local dev only — gunicorn (production) imports `app` and never runs this
     # block, so debug is unreachable in the deployed service. Defaults on for
-    # local auto-reload; set FLASK_DEBUG=0 to disable.
+    # local auto-reload; set FLASK_DEBUG=0 to disable. When debug is on, bind to
+    # localhost only — the Werkzeug debugger is an RCE console and must never be
+    # exposed on the network.
     debug = os.environ.get("FLASK_DEBUG", "1") == "1"
-    app.run(debug=debug, threaded=True, host="0.0.0.0",
+    host = "127.0.0.1" if debug else "0.0.0.0"
+    app.run(debug=debug, threaded=True, host=host,
             port=int(os.environ.get("PORT", "5000")))
