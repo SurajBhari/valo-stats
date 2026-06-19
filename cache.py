@@ -24,7 +24,7 @@ def save_matches(puuid, matches):
     path = _path(puuid)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(matches, f)
+        json.dump(matches, f, indent=4)
 
 
 def load_details(puuid):
@@ -40,7 +40,7 @@ def save_details(puuid, mapping):
     path = _details_path(puuid)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(mapping, f)
+        json.dump(mapping, f, indent=4)
 
 
 def merge_matches(existing, new):
