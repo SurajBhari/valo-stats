@@ -3,6 +3,7 @@
   @page { size: A4; margin: 1.2cm; background: #15171c; }
   * { box-sizing: border-box; }
   body { font-family: "Segoe UI", Arial, sans-serif; color: #e6e8ee; background: #15171c; margin: 0; }
+  .page { max-width: 820px; margin: 0 auto; padding: 22px 18px 48px; }
   h1 { margin: 0; font-size: 26px; letter-spacing: 0.5px; }
   h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 1.5px;
        color: #ff4655; border-bottom: 1px solid #2a2e38; padding-bottom: 4px;
@@ -60,6 +61,7 @@
   .combat .cv { display: block; font-size: 20px; font-weight: 700; color: #fff; }
   .combat .cl { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #8a90a2; }
 </style></head><body>
+  <div class="page">
 
   {% if player.card_img %}
   <div class="hero">
@@ -202,4 +204,5 @@
   </table>
 
   {% endif %}
+  </div>
 </body></html>
