@@ -118,5 +118,9 @@ def pdf(job_id):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, threaded=True, host="0.0.0.0",
+    # Local dev only — gunicorn (production) imports `app` and never runs this
+    # block, so debug is unreachable in the deployed service. Defaults on for
+    # local auto-reload; set FLASK_DEBUG=0 to disable.
+    debug = os.environ.get("FLASK_DEBUG", "1") == "1"
+    app.run(debug=debug, threaded=True, host="0.0.0.0",
             port=int(os.environ.get("PORT", "5000")))
