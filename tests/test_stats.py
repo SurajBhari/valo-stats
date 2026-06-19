@@ -22,6 +22,22 @@ def test_overview_basic():
     assert ov["kda"] == round((30 + 10) / 30, 2)
 
 
+def test_overview_efficiency_per_round():
+    # one match: 20 kills, 10 deaths, 5 assists, 24 rounds, dmg 4000/3000
+    out = stats.aggregate([_m(kills=20, deaths=10, assists=5, rounds=24,
+                              damage_made=4000, damage_received=3000)])
+    ov = out["overview"]
+    assert ov["kpr"] == round(20 / 24, 2)
+    assert ov["dpr"] == round(10 / 24, 2)
+    assert ov["apr"] == round(5 / 24, 2)
+    assert ov["dd_delta"] == round((4000 - 3000) / 24, 1)
+
+
+def test_overview_efficiency_empty():
+    ov = stats.aggregate([])["overview"]
+    assert ov["kpr"] == 0.0 and ov["dpr"] == 0.0 and ov["apr"] == 0.0 and ov["dd_delta"] == 0.0
+
+
 def test_headshot_and_acs():
     out = stats.aggregate([_m(head=20, body=70, leg=10, score=4800, rounds=24)])
     ov = out["overview"]
