@@ -106,6 +106,39 @@ def weapon_icon(name):
     return _data_uri(_weapons.get(name))
 
 
+# --- Raw CDN URL lookups (for the web dashboard; browser fetches directly) ---
+
+def agent_icon_url(name):
+    global _agents
+    if _agents is None:
+        _agents = _name_map("agents")
+    return _agents.get(name)
+
+
+def map_icon_url(name):
+    global _maps
+    if _maps is None:
+        _maps = _name_map("maps")
+    return _maps.get(name)
+
+
+def weapon_icon_url(name):
+    global _weapons
+    if _weapons is None:
+        _weapons = _name_map("weapons")
+    return _weapons.get(name)
+
+
+def card_url(uuid):
+    """Player-card wide-art CDN URL for a card UUID, or None."""
+    if not uuid:
+        return None
+    body = _get_json(f"{VAPI}/playercards/{uuid}")
+    if not body:
+        return None
+    return (body.get("data") or {}).get("wideArt")
+
+
 def card_image(uuid):
     """Player-card wide art for a card UUID, or None."""
     if not uuid:

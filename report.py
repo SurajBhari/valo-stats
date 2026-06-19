@@ -49,6 +49,46 @@ def render_html(stats, player, details=None):
         trend_pts=trend_pts, max_hour_games=max_hour_games)
 
 
+def build_report_data(stats, player, details=None):
+    """Assemble a JSON-serializable payload for the interactive web dashboard.
+
+    Image references are raw CDN URLs (the browser fetches them), not base64.
+    """
+    detail = None
+    if details:
+        d = detail_stats.aggregate_details(details)
+        for w in d["weapons"]:
+            w["icon_url"] = assets.weapon_icon_url(w["name"])
+        detail = d
+
+    per_map = [dict(m, icon_url=assets.map_icon_url(m["name"])) for m in stats.get("per_map", [])]
+    per_agent = [dict(a, icon_url=assets.agent_icon_url(a["name"])) for a in stats.get("per_agent", [])]
+
+    return {
+        "player": {
+            "name": player.get("name"), "tag": player.get("tag"),
+            "region": player.get("region"), "level": player.get("level"),
+            "rank_tier": player.get("rank_tier"), "rr": player.get("rr"),
+            "card_url": assets.card_url(player.get("card")),
+            "rank_url": player.get("rank_icon_url"),
+        },
+        "overview": stats.get("overview", {}),
+        "trends": stats.get("trends", []),
+        "per_map": per_map,
+        "per_agent": per_agent,
+        "weapons_shots": {
+            "head": stats.get("weapons", {}).get("head", 0),
+            "body": stats.get("weapons", {}).get("body", 0),
+            "leg": stats.get("weapons", {}).get("leg", 0),
+        },
+        "activity": stats.get("activity", {"by_weekday": [], "by_hour": []}),
+        "streaks": stats.get("streaks", {}),
+        "days": stats.get("days", {}),
+        "tips": [t["text"] for t in insights.generate(stats)],
+        "detail": detail,
+    }
+
+
 def render_pdf(stats, player, details=None):
     """Render the report to PDF bytes, or return None if WeasyPrint's native
     libraries are unavailable (caller then serves the HTML fallback)."""

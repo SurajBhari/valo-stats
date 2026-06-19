@@ -147,3 +147,44 @@ def test_activity_and_trend_sections_present():
     assert "Mon" in html and "Sun" in html
     # trend chart svg polyline (populated agg spans multiple months? guard either way)
     assert "Monthly trend" in html
+
+
+# ---------------------------------------------------------------------------
+# build_report_data — JSON-serializable dashboard payload
+# ---------------------------------------------------------------------------
+
+def _stub_urls(monkeypatch):
+    monkeypatch.setattr(assets, "agent_icon_url", lambda n: f"http://a/{n}")
+    monkeypatch.setattr(assets, "map_icon_url", lambda n: f"http://m/{n}")
+    monkeypatch.setattr(assets, "weapon_icon_url", lambda n: f"http://w/{n}")
+    monkeypatch.setattr(assets, "card_url", lambda u: "http://card" if u else None)
+
+
+def test_build_report_data_structure(monkeypatch):
+    _stub_urls(monkeypatch)
+    player = dict(_player(), card="cid", level=321, rank_tier="Diamond 3",
+                  rr=41, rank_icon_url="http://rank")
+    data = report.build_report_data(_populated_agg(), player, details=_details())
+
+    assert data["player"]["name"] == "WackyDipu"
+    assert data["player"]["card_url"] == "http://card"
+    assert data["player"]["rank_url"] == "http://rank"
+    assert data["player"]["rank_tier"] == "Diamond 3"
+    # tables carry icon urls
+    assert all("icon_url" in m for m in data["per_map"])
+    assert data["per_map"][0]["icon_url"].startswith("http://m/")
+    assert all("icon_url" in a for a in data["per_agent"])
+    # core blocks present and JSON-serializable
+    import json
+    json.dumps(data)
+    assert "overview" in data and "trends" in data and "activity" in data
+    assert data["detail"]["weapons"][0]["icon_url"].startswith("http://w/")
+    assert isinstance(data["tips"], list)
+
+
+def test_build_report_data_no_details(monkeypatch):
+    _stub_urls(monkeypatch)
+    data = report.build_report_data(_populated_agg(), _player())
+    assert data["detail"] is None
+    import json
+    json.dumps(data)
